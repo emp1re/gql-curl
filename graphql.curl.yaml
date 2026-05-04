@@ -2,8 +2,8 @@
 schema: "./example/gql/"  # Path to your GraphQL schema files
 output: "./generated_curls" # Directory where the generated cURL commands will be saved
 endpoint: "http://localhost:8080/graphql" # GraphQL endpoint URL
-credentials:
-  token: "${GQL_AUTH_TOKEN}" # Environment variable for the Bearer token
+environment:
+  GQL_AUTH_TOKEN: ${TOKEN_KEY} # Environment variable key for the Bearer token, which will be loaded from the .env file
 headers:
-  Authorization: "Bearer {{credentials.token}}" # Use the token from credentials in the Authorization header
+  Authorization: "Bearer {{environment.GQL_AUTH_TOKEN}}" # Use the token from environment variables in the Authorization header
   Content-Type: "application/json" # Set the Content-Type header to application/json

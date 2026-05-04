@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/joho/godotenv"
 	"gopkg.in/yaml.v3"
 )
 
@@ -12,21 +13,27 @@ type Config struct {
 	Schema      string            `yaml:"schema"`
 	Output      string            `yaml:"output"`
 	Endpoint    string            `yaml:"endpoint"`
-	Credentials map[string]string `yaml:"credentials"`
+	Environment map[string]string `yaml:"environment"`
 	Headers     map[string]string `yaml:"headers"`
 }
 
 func LoadConfig(path string) (*Config, error) {
+
+	_ = godotenv.Load()
+
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("error reading config file: %w", err)
+		return nil, fmt.Errorf("read config file failed: %w", err)
 	}
+
+	expandedData := os.ExpandEnv(string(data))
 
 	var cfg Config
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("error parsing config file: %w", err)
+	if err := yaml.Unmarshal([]byte(expandedData), &cfg); err != nil {
+		return nil, fmt.Errorf("unmarshal config failed: %w", err)
 	}
 
+	// {{environment.KEY}}
 	cfg.interpolateHeaders()
 
 	return &cfg, nil
@@ -34,19 +41,18 @@ func LoadConfig(path string) (*Config, error) {
 
 // interpolateHeaders
 func (c *Config) interpolateHeaders() {
-	if c.Credentials == nil || c.Headers == nil {
+	if c.Environment == nil || c.Headers == nil {
 		return
 	}
 
 	for headerName, headerValue := range c.Headers {
 		interpolatedValue := headerValue
 
-		// Go through each credential and replace placeholders in the header value
-		for credKey, credVal := range c.Credentials {
-			placeholder := fmt.Sprintf("{{credentials.%s}}", credKey)
-			// Replace all occurrences of the placeholder with the actual credential value
-			interpolatedValue = strings.ReplaceAll(interpolatedValue, placeholder, credVal)
+		for envKey, envVal := range c.Environment {
+			placeholder := fmt.Sprintf("{{environment.%s}}", envKey)
+			interpolatedValue = strings.ReplaceAll(interpolatedValue, placeholder, envVal)
 		}
+
 		c.Headers[headerName] = interpolatedValue
 	}
 }
