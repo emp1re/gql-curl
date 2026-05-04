@@ -1,8 +1,13 @@
 package generator
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"strings"
+	"time"
 
 	"github.com/vektah/gqlparser/v2/ast"
 )
@@ -43,6 +48,7 @@ func (g *Generator) GenerateCurl(opType string, field *ast.FieldDefinition) stri
 
 	payload := fmt.Sprintf(`{"query": "%s"}`, cleanQuery)
 	sb.WriteString(fmt.Sprintf("  --data-raw '%s'", payload))
+	sb.WriteString("| jq .") // Pipe to jq for pretty-printing the response
 
 	return sb.String()
 }
@@ -90,4 +96,47 @@ func (g *Generator) expandType(typ *ast.Type, depth int) string {
 
 	sb.WriteString("}")
 	return sb.String()
+}
+
+// ExecuteQuery sends the generated GraphQL query to the specified endpoint and returns the pretty-printed JSON response.
+func (g *Generator) ExecuteQuery(opType string, field *ast.FieldDefinition) (string, error) {
+	query := g.BuildQuery(opType, field)
+
+	// Prepare the JSON payload for the GraphQL request
+	payload := map[string]string{
+		"query": query,
+	}
+	body, _ := json.Marshal(payload)
+
+	// Create the HTTP request
+	req, err := http.NewRequest("POST", g.Endpoint, bytes.NewBuffer(body))
+	if err != nil {
+		return "", err
+	}
+
+	// Headers
+	for k, v := range g.Headers {
+		req.Header.Set(k, v)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	// Send the request with a timeout
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	var prettyJSON bytes.Buffer
+	if err := json.Indent(&prettyJSON, respBody, "", "  "); err != nil {
+		return string(respBody), nil // Return raw response if pretty-printing fails
+	}
+
+	return prettyJSON.String(), nil
 }

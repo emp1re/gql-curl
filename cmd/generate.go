@@ -11,6 +11,8 @@ import (
 	"github.com/vektah/gqlparser/v2/ast"
 )
 
+var run bool
+
 var generateCmd = &cobra.Command{
 	Use:   "generate [operationName]",
 	Short: "Generate cURL commands for GraphQL operations defined in the schema",
@@ -58,7 +60,21 @@ var generateCmd = &cobra.Command{
 
 				found = true
 				curl := gen.GenerateCurl(op.OpType, field)
-				fmt.Printf("\n# Field: %s\n%s\n", field.Name, curl)
+				fmt.Printf("\n# Operation: %s %s\n", op.OpType, curl)
+
+				if run {
+					fmt.Printf("🚀 Executing against endpoint: %s\n", cfg.Endpoint)
+					result, err := gen.ExecuteQuery(op.OpType, field)
+					if err != nil {
+						fmt.Printf("❌ Error: %v\n", err)
+					} else {
+						fmt.Println(result)
+					}
+				} else {
+					// Якщо флаг --run не вказано, просто виводимо curl
+					curl := gen.GenerateCurl(op.OpType, field)
+					fmt.Println(curl)
+				}
 			}
 		}
 
@@ -66,9 +82,12 @@ var generateCmd = &cobra.Command{
 		if targetOp != "" && !found {
 			log.Fatalf("❌ Operation '%s' not found in schema", targetOp)
 		}
+
 	},
 }
 
 func init() {
+	// Expose the --run flag to allow users to execute the generated query directly against the endpoint
+	generateCmd.Flags().BoolVarP(&run, "run", "r", false, "Connect to the endpoint and execute the generated query, printing the response")
 	rootCmd.AddCommand(generateCmd)
 }
