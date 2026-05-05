@@ -54,7 +54,7 @@ Keep your local development environment in sync with the server effortlessly.
 ## 📦 Installation
 
 ```bash
-go install github.com/emp1re/gql-curl@latest
+go install github.com/emp1re/gql-curl/cmd/gqc@latest
 ```
 
 ## 🛠 Configuration
