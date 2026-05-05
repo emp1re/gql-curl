@@ -2,16 +2,27 @@ package generator
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptrace"
 	"strings"
 	"time"
 
 	"github.com/emp1re/gql-curl/internal/config"
 	"github.com/vektah/gqlparser/v2/ast"
 )
+
+type Metrics struct {
+	DNS   time.Duration
+	TCP   time.Duration
+	TLS   time.Duration
+	TTFB  time.Duration // Time To First Byte
+	Total time.Duration
+	Size  int64 // Response size in bytes
+}
 
 type Generator struct {
 	Schema   *ast.Schema
@@ -200,7 +211,7 @@ func (g *Generator) expandType(typ *ast.Type, depth int) string {
 }
 
 // ExecuteQuery sends the generated GraphQL query to the specified endpoint and returns the pretty-printed JSON response.
-func (g *Generator) ExecuteQuery(opType string, field *ast.FieldDefinition, customVars map[string]interface{}) (string, error) {
+func (g *Generator) ExecuteQuery(opType string, field *ast.FieldDefinition, customVars map[string]interface{}) (string, *Metrics, error) {
 	query := g.buildOperationString(opType, field)
 
 	var vars map[string]interface{}
@@ -221,12 +232,12 @@ func (g *Generator) ExecuteQuery(opType string, field *ast.FieldDefinition, cust
 	encoder := json.NewEncoder(&buf)
 	encoder.SetEscapeHTML(false)
 	if err := encoder.Encode(payloadMap); err != nil {
-		return "", fmt.Errorf("encode payload failed: %w", err)
+		return "", nil, fmt.Errorf("encode payload failed: %w", err)
 	}
 
 	req, err := http.NewRequest("POST", g.Endpoint, &buf)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 
 	// Headers
@@ -235,23 +246,62 @@ func (g *Generator) ExecuteQuery(opType string, field *ast.FieldDefinition, cust
 	}
 	req.Header.Set("Content-Type", "application/json")
 
+	// <-- HTTP Trace for metrics -->
+	var t0, t1, t2, t3, t4 time.Time
+	var dnsStart, tcpStart, tlsStart time.Time
+
+	trace := &httptrace.ClientTrace{
+		DNSStart: func(_ httptrace.DNSStartInfo) { dnsStart = time.Now() },
+		DNSDone:  func(_ httptrace.DNSDoneInfo) { t1 = time.Now() },
+		ConnectStart: func(_, _ string) {
+			if dnsStart.IsZero() {
+				t1 = time.Now()
+			}
+			tcpStart = time.Now()
+		},
+		ConnectDone:          func(net, addr string, err error) { t2 = time.Now() },
+		TLSHandshakeStart:    func() { tlsStart = time.Now() },
+		TLSHandshakeDone:     func(_ tls.ConnectionState, _ error) { t3 = time.Now() },
+		GotFirstResponseByte: func() { t4 = time.Now() },
+	}
+
+	// Додаємо трейсер у контекст запиту
+	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
+
 	// Send the request with a timeout
 	client := &http.Client{Timeout: 10 * time.Second}
+	t0 = time.Now() // Старт запиту
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		return "", nil, err
+	}
+	t5 := time.Now() // Кінець читання відповіді
+
+	// Розрахунок метрик (з урахуванням того, що при повторному запиті TCP/TLS можуть бути опущені через Keep-Alive)
+	metrics := &Metrics{
+		Total: t5.Sub(t0),
+		Size:  int64(len(respBody)),
 	}
 
-	var obj map[string]interface{}
-	if err := json.Unmarshal(respBody, &obj); err != nil {
-		return string(respBody), nil
+	if !t1.IsZero() && !dnsStart.IsZero() {
+		metrics.DNS = t1.Sub(dnsStart)
+	}
+	if !t2.IsZero() && !tcpStart.IsZero() {
+		metrics.TCP = t2.Sub(tcpStart)
+	}
+	if !t3.IsZero() && !tlsStart.IsZero() {
+		metrics.TLS = t3.Sub(tlsStart)
+	}
+	if !t4.IsZero() {
+		// TTFB = час від відправки запиту до отримання першого байта
+		metrics.TTFB = t4.Sub(t0)
 	}
 
-	return string(respBody), nil
+	return string(respBody), metrics, nil
 }

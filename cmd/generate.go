@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/TylerBrock/colorjson"
 	"github.com/emp1re/gql-curl/internal/config"
@@ -92,7 +93,7 @@ var generateCmd = &cobra.Command{
 		successColor := color.New(color.FgGreen, color.Bold).SprintFunc()
 		errorColor := color.New(color.FgRed, color.Bold).SprintFunc()
 		infoColor := color.New(color.FgCyan).SprintFunc()
-		cmdColor := color.New(color.FgHiYellow).SprintFunc()
+		cmdColor := color.New(color.FgYellow).SprintFunc()
 
 		found := false
 
@@ -126,7 +127,10 @@ var generateCmd = &cobra.Command{
 				if run {
 					fmt.Printf("\n🚀 %s %s...\n", infoColor("Execute request:"), successColor(field.Name))
 
-					resultRaw, err := gen.ExecuteQuery(op.OpType, field, finalVars)
+					curlQuery := gen.GenerateCurl(op.OpType, field, finalVars)
+					fmt.Printf("%s\n\n", cmdColor(curlQuery))
+
+					resultRaw, metrics, err := gen.ExecuteQuery(op.OpType, field, finalVars)
 					if err != nil {
 						fmt.Printf("❌ %s %v\n", errorColor("Execution error:"), err)
 					} else {
@@ -149,6 +153,20 @@ var generateCmd = &cobra.Command{
 							}
 						} else {
 							printColorized(resultRaw)
+						}
+						if metrics != nil {
+							metricColor := color.New(color.FgHiMagenta).SprintFunc()
+							valColor := color.New(color.FgWhite, color.Bold).SprintFunc()
+
+							fmt.Printf("\n%s\n", metricColor("📊 Performance Metrics:"))
+							fmt.Printf("  %s %s  %s %s  %s %s  %s %s  %s %s  %s %s\n",
+								metricColor("Total:"), valColor(metrics.Total.Round(time.Millisecond)),
+								metricColor("TTFB:"), valColor(metrics.TTFB.Round(time.Millisecond)),
+								metricColor("DNS:"), valColor(metrics.DNS.Round(time.Millisecond)),
+								metricColor("TCP:"), valColor(metrics.TCP.Round(time.Millisecond)),
+								metricColor("TLS:"), valColor(metrics.TLS.Round(time.Millisecond)),
+								metricColor("Size:"), valColor(formatBytes(metrics.Size)),
+							)
 						}
 					}
 				} else {
@@ -182,6 +200,19 @@ func printColorized(rawJSON string) {
 	f.Indent = 2
 	colored, _ := f.Marshal(obj)
 	fmt.Println(string(colored))
+}
+
+func formatBytes(b int64) string {
+	const unit = 1024
+	if b < unit {
+		return fmt.Sprintf("%d B", b)
+	}
+	div, exp := int64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.2f %cB", float64(b)/float64(div), "KMGTPE"[exp])
 }
 
 func init() {
