@@ -1,200 +1,126 @@
-# GraphQL-Curl (`gqc`)
+# 🚀 gql-curl (gqc)
 
-`gqc` is a Go CLI that reads your GraphQL schema and helps you either:
+[![Go Version](https://img.shields.io/github/go-mod/go-version/emp1re/gql-curl)](https://golang.org)
+[![License](https://img.shields.io/github/license/emp1re/gql-curl)](LICENSE)
 
-- generate ready-to-run `curl` requests for top-level `query` and `mutation` fields, or
-- execute those generated operations directly against your endpoint.
+**gql-curl** is a high-performance, interactive CLI tool designed for developers who are tired of fighting with manual JSON payloads in `curl` or waiting for heavy GUI clients to load. 
 
-It also supports schema fetching via GraphQL introspection.
+Written in Go, it bridges the gap between the speed of the command line and the intelligence of a full-blown GraphQL IDE.
 
-## What's New
+---
 
-- `--interactive` mode to fill variables from a terminal form.
-- `--run` mode to execute generated operations immediately.
-- Request performance metrics in `--run` mode (Total, TTFB, DNS, TCP, TLS, Size).
-- `--filter` support (gjson syntax) to print only part of a response.
-- Variables from inline JSON (`--vars`) or JSON file (`--var-file`).
-- Header interpolation using `{{environment.KEY}}` values.
-- Configurable query expansion depth via `environment.MAX_DEPTH`.
-- Configurable schema file extensions via `document_extensions`.
+## ✨ Key Features
 
-## Requirements
+* **🎮 Interactive TUI:** Type-safe terminal forms for variable input. No more JSON syntax errors.
+* **📊 Professional Profiling:** Detailed network breakdown (TTFB, DNS, TLS) for every request.
+* **📡 Instant Introspection:** Sync your local SDL schema from any remote endpoint in seconds.
+* **🔍 Built-in Filtering:** Extract data directly with GJSON paths—no `jq` required.
+* **🎨 Beautiful DX:** Syntax highlighting for queries, responses, and generated `curl` commands.
+* **⚡ Single Binary:** Written in Go. Zero dependencies. Works everywhere.
 
-- Go `1.25.5` (from `go.mod`).
+---
 
-## Install
+## ✨ Features Deep Dive
 
-### Option 1: Install from module
+### 🎮 Smart Interactive Variable Injection
+Handling complex GraphQL input objects and nested variables in a standard terminal is a nightmare. 
+- **Type-Aware Forms:** `gql-curl` parses your schema's AST to generate interactive forms. It knows if a field is an `Int`, `Boolean`, or a complex `InputObject`.
+- **Enum Autocompletion:** No more guessing valid enum values. Select them from a visual list.
+- **Recursive Input:** Easily fill out deeply nested objects without worrying about JSON syntax or escaping quotes.
+
+### 📊 Professional Performance Profiling
+Stop guessing why your request is slow. Powered by Go's `httptrace`, we provide a granular breakdown of the request lifecycle:
+- **TTFB (Time To First Byte):** Isolate server-side processing time from network latency.
+- **Network Overhead:** See exactly how much time is spent on DNS lookup, TCP connection, and TLS handshakes.
+- **Payload Analysis:** Real-time reporting of response sizes to detect unoptimized queries or missing pagination.
+
+### 📡 Schema Synchronization (Introspection)
+Keep your local development environment in sync with the server effortlessly.
+- **SDL Generation:** Automatically converts raw JSON introspection data into clean, readable `.graphql` Schema Definition Language.
+- **Authenticated Fetch:** Supports custom headers (like `Authorization`) during introspection, allowing you to pull schemas from protected production or staging environments.
+
+### 🔍 Scripting & Post-Processing
+`gql-curl` is designed to be a "good citizen" in your shell environment.
+- **Built-in GJSON Engine:** Use the `-q` flag to extract specific data from deep JSON paths without needing external tools like `jq`.
+- **Bash-Friendly Output:** When filtering, the tool returns raw scalar values (strings, numbers) making it trivial to pipe results into other commands or environment variables.
+
+### 🎨 Developer Experience (DX) First
+- **Zero Runtime Friction:** A single statically linked binary. No `node_modules`, no Python interpreters, no JVM.
+- **Silent & Verbose Modes:** Output only what you need—either a clean `curl` command for documentation or the full execution results with metrics.
+- **Colorized Everything:** High-contrast syntax highlighting for both the generated queries and the server responses.
+
+---
+
+## 📦 Installation
 
 ```bash
-go install github.com/emp1re/gql-curl/cmd/gqc@latest
+go install [github.com/emp1re/gql-curl@latest](https://github.com/emp1re/gql-curl@latest)
 ```
 
-### Option 2: Build from source
-
-```bash
-git clone https://github.com/emp1re/gql-curl
-cd gql-curl
-go build -o gqc ./cmd/gqc
-```
-
-## Quick Start
-
-1. Create `graphql.curl.yaml` in your working directory.
-2. Point `schema` to your GraphQL schema directory.
-3. Run `gqc generate`.
-
-```bash
-gqc generate
-```
-
-Generate one operation only:
-
-```bash
-gqc generate getUser
-```
-
-## Configuration (`graphql.curl.yaml`)
-
-The CLI loads `graphql.curl.yaml` from the current directory.
-It also calls `.env` loading automatically (via `godotenv`).
+## 🛠 Configuration
+Create a graphql.curl.yaml in your project root:
 
 ```yaml
-schema: "./schema"
-document_extensions: [".graphql", ".graphqls", ".gql"]
-endpoint: "http://localhost:8080/graphql"
+schema: "./schema.graphql"
+endpoint: "http://localhost:8008/gql/query"
+output: "./generated" # Target directory for saved curls
 
 environment:
-  GQL_AUTH_TOKEN: ${GQL_AUTH_TOKEN}
-  MAX_DEPTH: "3"
+  AUTH_TOKEN: "${GQL_TOKEN}" # Loads from your .env or shell
 
 headers:
-  Authorization: "Bearer {{environment.GQL_AUTH_TOKEN}}"
+  Authorization: "Bearer {{environment.AUTH_TOKEN}}"
+  X-Custom-Header: "GQC-Client"
 ```
 
-### Field Reference
-
-- `schema` (string): path to schema directory (used by `generate`) or output file/dir target (used by `fetch`).
-- `document_extensions` ([]string): schema file extensions to parse (for example `.graphql`, `.graphqls`, `.gql`).
-- `endpoint` (string): GraphQL server URL.
-- `environment` (map): values used for interpolation and runtime settings (like `MAX_DEPTH`).
-- `headers` (map): HTTP headers for generated/executed requests.
-- `output` (string): present in config struct, currently not used by commands.
-
-## Commands
-
-### `generate`
-
-Generate `curl` commands for all root operations:
-
-```bash
-gqc generate
-```
-
-Generate for one operation:
-
-```bash
-gqc generate getUser || gqc g getUser
-```
-
-Use inline variables:
-
-```bash
-gqc generate getUser --vars '{"id":"123"}' || gqc g getUser --vars '{"id":"123"}'
-```
-
-Use variables from file:
-
-```bash
-gqc generate getUser --var-file ./vars.json || gqc g getUser --var-file ./vars.json
-```
-
-Interactive variable input:
-
-```bash
-gqc generate createUser --interactive || gqc g createUser -i
-```
-
-Execute request immediately:
-
-```bash
-gqc generate getUser --run
-```
-
-Execute and filter output (gjson path):
-
-```bash
-gqc generate getUser --run --filter 'data.getUser.name'
-```
-
-Run with variables and still see performance metrics:
-
-```bash
-gqc generate getUser --run --vars '{"id":"123"}'
-```
-
-> Note: `--vars` and `--var-file` are mutually exclusive.
-
-### `fetch`
-
-Fetch schema using introspection and save it to `schema` path from config:
+## 🚀 Quick Start
+1. Fetch the Schema
+Bootstrap your project by pulling the schema from your live endpoint:
 
 ```bash
 gqc fetch
 ```
 
-If `schema` points to a directory, output is saved as `schema.graphql` in that directory.
-
-## Generated Output Example
+2. Generate and Execute
+Generate a query, fill variables interactively, and execute it immediately:
 
 ```bash
-# Operation: query | Field: getUser
-curl -X POST http://localhost:8080/graphql \
-  -H 'Authorization: Bearer <token>' \
-  -H 'Content-Type: application/json' \
-  --data-raw '{"query":"query getUser($id: ID!) { getUser(id: $id) { id name } }","variables":{"id":"<ID>"}}'
+gqc generate myMutation -i -r
 ```
 
-## Runtime Response Behavior (`--run`)
+3. Filter the Result
+Need just a specific field from a massive response? Use the filter flag:
 
-- JSON object/array responses are colorized and pretty-printed.
-- With `--filter`, scalar results are printed as raw values (useful for scripts).
-- If filtered path does not exist, a warning is shown.
+```bash
+gqc g getContact -r -q "data.getContact.email"
+```
 
-## Metrics
+## 📖 Command Reference
 
-When you use `gqc generate ... --run`, the CLI prints a performance block after the response:
+| Command | Alias | Description |
+| --- | --- | --- |
+| fetch | f | Pull SDL schema from remote endpoint via Introspection. |
+| generate | g | Generate a GraphQL operation and its corresponding curl. |
+| completion |  | Generate autocompletion scripts for Bash, Zsh, Fish. |
 
-- `Total`: full request time (send request + receive/read response body).
-- `TTFB`: time to first byte from the server.
-- `DNS`: DNS lookup duration (can be zero on cached/reused connections).
-- `TCP`: TCP connect duration (can be zero on keep-alive reuse).
-- `TLS`: TLS handshake duration (can be zero for plain HTTP or reused TLS session).
-- `Size`: response body size.
+Generation Flags
+* **`-i, --interactive`**: Enable TUI for variable input.
 
-Example:
+* **`-r, --run`**: Execute the request immediately after generation.
 
-```text
+* **`-q, --filter`**: Filter the JSON response (GJSON syntax).
+
+* **`-v, --vars`**: Pass variables as a JSON string.
+
+## 📊 Performance Benchmarking
+
+When using the **`--run`** flag, **`gql-curl`** provides a detailed breakdown of your request lifecycle:
+
+```bash
 📊 Performance Metrics:
-  Total: 123ms  TTFB: 47ms  DNS: 2ms  TCP: 4ms  TLS: 0ms  Size: 3.21 KB
+  Total: 142ms  TTFB: 135ms  DNS: 2ms  TCP: 4ms  TLS: 1ms  Size: 1.45 KB
 ```
 
-This is useful for quick endpoint latency checks without external tooling.
+* **TTFB**: Time To First Byte (measures how fast your resolver/DB actually is).
 
-## Help
-
-```bash
-gqc --help
-gqc generate --help
-gqc fetch --help
-```
-
-## Development
-
-Run without installing:
-
-```bash
-go run ./cmd/gqc --help
-go run ./cmd/gqc generate --help
-go run ./cmd/gqc fetch --help
-```
+* **DNS/TCP/TLS**: Helps identify network-level bottlenecks.
