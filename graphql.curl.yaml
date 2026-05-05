@@ -5,9 +5,8 @@ document_extensions: [".graphql", ".graphqls",".gql"] # Optional: Specify the fi
 endpoint: "http://localhost:8080/graphql" # GraphQL endpoint URL
 
 environment:
-  GQL_AUTH_TOKEN: ${TOKEN_KEY} # Environment variable key for the Bearer token, which will be loaded from the .env file
+  GQL_AUTH_TOKEN: ${KEY} # Environment variable key for the Bearer token, which will be loaded from the .env file
   MAX_DEPTH: 3 # Optional environment variable for maximum query depth
 
 headers:
   Authorization: "Bearer {{environment.GQL_AUTH_TOKEN}}" # Use the token from environment variables in the Authorization header
-  Content-Type: "application/json" # Set the Content-Type header to application/json
