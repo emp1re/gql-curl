@@ -5,8 +5,10 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
+	"github.com/emp1re/gql-curl/internal/config"
 	"github.com/vektah/gqlparser/v2"
 	"github.com/vektah/gqlparser/v2/ast"
 )
@@ -28,7 +30,7 @@ func NewParserFromDir(rootPath string) (*GQLParser, error) {
 
 		// Check file extension (case-insensitive)
 		ext := strings.ToLower(filepath.Ext(path))
-		if ext == ".graphql" || ext == ".graphqls" {
+		if slices.Contains(config.DocumentExtensions, ext) {
 			content, err := os.ReadFile(path)
 			if err != nil {
 				return fmt.Errorf("read file %s failed: %w", path, err)
@@ -46,7 +48,7 @@ func NewParserFromDir(rootPath string) (*GQLParser, error) {
 	}
 
 	if len(sources) == 0 {
-		return nil, fmt.Errorf("no .graphql or .graphqls files found in %s", rootPath)
+		return nil, fmt.Errorf("no %s files found in %s, set 'document_extensions' in config if your schema files have different extensions", strings.Join(config.DocumentExtensions, ", "), rootPath)
 	}
 
 	// Loading schema from collected sources

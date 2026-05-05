@@ -67,7 +67,7 @@ headers:
 - `schema`: Directory containing `.graphql` / `.graphqls` files.
 - `output`: Currently not used by the CLI (commands are printed to stdout).
 - `endpoint`: GraphQL HTTP endpoint.
-- `credentials`: Key/value map used for header interpolation.
+- `environment`: Optional environment variables from ENV or other sources.
 - `headers`: HTTP headers included in generated `curl` command.
 
 ## Usage
@@ -88,15 +88,21 @@ gqc generate
 Generate command for one operation only:
 
 ```bash
-gqc generate operationName
+gqc generate [operationName]
 ```
+
+Run the generated `curl` command in your terminal to execute the GraphQL query/mutation.
+
+```bash
+gqc generate operationName [--run || -r]
+````
 
 ## Example Output
 
 ```bash
-# Field: getUser
+# Operation: getUser
 curl -X POST http://localhost:8080/graphql \
-  -H 'Authorization: Bearer your-token' \
+  -H 'Authorization: Bearer {$GQL_AUTH_TOKEN}' \
   -H 'Content-Type: application/json' \
   --data-raw '{"query": "query { getUser { id name } }"}'
 ```

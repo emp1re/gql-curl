@@ -9,11 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/emp1re/gql-curl/internal/config"
 	"github.com/vektah/gqlparser/v2/ast"
 )
-
-// MaxDepth defines how deep the generator will expand nested types when building the selection set.
-const MaxDepth = 3
 
 type Generator struct {
 	Schema   *ast.Schema
@@ -63,7 +61,7 @@ func (g *Generator) BuildQuery(opType string, field *ast.FieldDefinition) string
 
 // expandType recursively builds the selection set for a given GraphQL type, respecting the maximum depth to avoid infinite recursion.
 func (g *Generator) expandType(typ *ast.Type, depth int) string {
-	if depth > MaxDepth {
+	if depth > config.MaxDepth {
 		return ""
 	}
 
