@@ -6,12 +6,14 @@ import (
 	"log"
 	"os"
 
+	"github.com/TylerBrock/colorjson"
 	"github.com/emp1re/gql-curl/internal/config"
 	"github.com/emp1re/gql-curl/internal/generator"
 	"github.com/emp1re/gql-curl/internal/parser"
 	"github.com/emp1re/gql-curl/internal/tui"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
+	"github.com/tidwall/gjson"
 	"github.com/vektah/gqlparser/v2/ast"
 )
 
@@ -20,9 +22,11 @@ var (
 	varsStr     string
 	varsFile    string
 	interactive bool
+	filterStr   string
 )
 
-// parseVariables відповідає за читання JSON з рядка або файлу
+// parseVariables is a helper function that takes either a raw JSON string or a file path to a JSON file, and parses it into a map[string]interface{}.
+// It ensures that both inputs are not provided at the same time and provides detailed error messages for various failure scenarios.
 func parseVariables(vStr, vFile string) (map[string]interface{}, error) {
 	if vStr != "" && vFile != "" {
 		return nil, fmt.Errorf("❌ You cannot use both --vars and --vars-file flags at the same time. Please choose one.")
@@ -39,7 +43,6 @@ func parseVariables(vStr, vFile string) (map[string]interface{}, error) {
 	} else if vStr != "" {
 		data = []byte(vStr)
 	} else {
-		// Якщо прапорці не передані, повертаємо nil
 		return nil, nil
 	}
 
@@ -111,7 +114,7 @@ var generateCmd = &cobra.Command{
 					// Create an interactive form for filling in variables based on the field's arguments
 					finalVars, err = tui.FillVariablesInteractive(gql.Schema, field.Arguments)
 					if err != nil {
-						log.Fatalf("❌ Помилка вводу: %v", err)
+						log.Fatalf("❌ Input Error: %v", err)
 					}
 				} else if varsStr != "" || varsFile != "" {
 					finalVars, err = parseVariables(varsStr, varsFile)
@@ -123,11 +126,30 @@ var generateCmd = &cobra.Command{
 				if run {
 					fmt.Printf("\n🚀 %s %s...\n", infoColor("Execute request:"), successColor(field.Name))
 
-					result, err := gen.ExecuteQuery(op.OpType, field, finalVars)
+					resultRaw, err := gen.ExecuteQuery(op.OpType, field, finalVars)
 					if err != nil {
 						fmt.Printf("❌ %s %v\n", errorColor("Execution error:"), err)
 					} else {
-						fmt.Printf("✅ %s\n%s\n", successColor("Server response:"), result)
+						fmt.Printf("✅ %s\n", successColor("Server request:"))
+
+						// Filter the response using gjson if a filter string is provided; otherwise, print the entire response colorized
+						if filterStr != "" {
+							parsed := gjson.Get(resultRaw, filterStr)
+
+							if !parsed.Exists() {
+								fmt.Printf("⚠️ %s Path '%s' not found in response\n", errorColor("Attention:"), filterStr)
+							} else {
+								// If the filtered result is an object or array, print it colorized; otherwise, print it as a raw string (useful for bash scripts)
+								if parsed.IsObject() || parsed.IsArray() {
+									printColorized(parsed.Raw)
+								} else {
+									// Raw string output for non-object/array results, which is useful for command-line usage (e.g., in bash scripts)
+									fmt.Println(parsed.String())
+								}
+							}
+						} else {
+							printColorized(resultRaw)
+						}
 					}
 				} else {
 					curl := gen.GenerateCurl(op.OpType, field, finalVars)
@@ -149,11 +171,25 @@ var generateCmd = &cobra.Command{
 	},
 }
 
+func printColorized(rawJSON string) {
+	var obj interface{}
+	if err := json.Unmarshal([]byte(rawJSON), &obj); err != nil {
+		fmt.Println(rawJSON)
+		return
+	}
+
+	f := colorjson.NewFormatter()
+	f.Indent = 2
+	colored, _ := f.Marshal(obj)
+	fmt.Println(string(colored))
+}
+
 func init() {
 	generateCmd.Flags().StringVarP(&varsStr, "vars", "v", "", "JSON raw with variables (exam. '{\"id\": 1}')")
 	generateCmd.Flags().StringVarP(&varsFile, "var-file", "f", "", "Path to a JSON file containing variables (exam. './vars.json')")
 	generateCmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Interactively fill in variable")
 	// Expose the --run flag to allow users to execute the generated query directly against the endpoint
 	generateCmd.Flags().BoolVarP(&run, "run", "r", false, "Connect to the endpoint and execute the generated query, printing the response")
+	generateCmd.Flags().StringVarP(&filterStr, "filter", "q", "", "Path to filter the response using gjson syntax (e.g. 'data.user.name') - works only with --run flag")
 	rootCmd.AddCommand(generateCmd)
 }

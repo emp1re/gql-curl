@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/TylerBrock/colorjson"
 	"github.com/emp1re/gql-curl/internal/config"
 	"github.com/vektah/gqlparser/v2/ast"
 )
@@ -251,20 +250,8 @@ func (g *Generator) ExecuteQuery(opType string, field *ast.FieldDefinition, cust
 
 	var obj map[string]interface{}
 	if err := json.Unmarshal(respBody, &obj); err != nil {
-		// Якщо сервер повернув не JSON (наприклад, 502 Bad Gateway в HTML),
-		// повертаємо як є
 		return string(respBody), nil
 	}
 
-	// Налаштовуємо форматер (можна кастомізувати кольори)
-	f := colorjson.NewFormatter()
-	f.Indent = 2
-
-	// Конвертуємо об'єкт у кольоровий рядок
-	coloredJSON, err := f.Marshal(obj)
-	if err != nil {
-		return string(respBody), nil
-	}
-
-	return string(coloredJSON), nil
+	return string(respBody), nil
 }
