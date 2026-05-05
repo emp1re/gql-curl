@@ -9,14 +9,17 @@ import (
 	"github.com/emp1re/gql-curl/internal/config"
 	"github.com/emp1re/gql-curl/internal/generator"
 	"github.com/emp1re/gql-curl/internal/parser"
+	"github.com/emp1re/gql-curl/internal/tui"
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/vektah/gqlparser/v2/ast"
 )
 
 var (
-	run      bool
-	varsStr  string
-	varsFile string
+	run         bool
+	varsStr     string
+	varsFile    string
+	interactive bool
 )
 
 // parseVariables відповідає за читання JSON з рядка або файлу
@@ -50,14 +53,12 @@ func parseVariables(vStr, vFile string) (map[string]interface{}, error) {
 }
 
 var generateCmd = &cobra.Command{
-	Use:   "generate [operationName]",
-	Short: "Generate cURL commands for GraphQL operations defined in the schema",
-	Args:  cobra.MaximumNArgs(1), // Only one optional argument for operation name
+	Use:     "generate [operationName] [flags]",
+	Aliases: []string{"g", "gen"},
+	Short:   "Generate cURL commands for GraphQL operations defined in the schema",
+	Args:    cobra.MaximumNArgs(1), // Only one optional argument for operation name
 	Run: func(cmd *cobra.Command, args []string) {
-		customVars, err := parseVariables(varsStr, varsFile)
-		if err != nil {
-			log.Fatalf("%v", err)
-		}
+
 		cfg, err := config.LoadConfig("graphql.curl.yaml")
 		if err != nil {
 			log.Fatalf("❌ Load config error: %v", err)
@@ -85,6 +86,11 @@ var generateCmd = &cobra.Command{
 			{"mutation", gql.Schema.Mutation},
 		}
 
+		successColor := color.New(color.FgGreen, color.Bold).SprintFunc()
+		errorColor := color.New(color.FgRed, color.Bold).SprintFunc()
+		infoColor := color.New(color.FgCyan).SprintFunc()
+		cmdColor := color.New(color.FgHiYellow).SprintFunc()
+
 		found := false
 
 		for _, op := range operations {
@@ -98,23 +104,39 @@ var generateCmd = &cobra.Command{
 					continue
 				}
 
+				var finalVars map[string]interface{}
+				var err error
+
+				if interactive && len(field.Arguments) > 0 {
+					// Create an interactive form for filling in variables based on the field's arguments
+					finalVars, err = tui.FillVariablesInteractive(gql.Schema, field.Arguments)
+					if err != nil {
+						log.Fatalf("❌ Помилка вводу: %v", err)
+					}
+				} else if varsStr != "" || varsFile != "" {
+					finalVars, err = parseVariables(varsStr, varsFile)
+				}
+
 				found = true
 
 				// If the --run flag is set, execute the generated query against the endpoint and print the response
 				if run {
-					fmt.Printf("\n🚀 Execute query: %s...\n", field.Name)
-					curl := gen.GenerateCurl(op.OpType, field, customVars)
-					fmt.Printf("\n# Operation: %s | Field: %s\n%s\n\n", op.OpType, field.Name, curl)
-					result, err := gen.ExecuteQuery(op.OpType, field, customVars)
+					fmt.Printf("\n🚀 %s %s...\n", infoColor("Execute request:"), successColor(field.Name))
+
+					result, err := gen.ExecuteQuery(op.OpType, field, finalVars)
 					if err != nil {
-						fmt.Printf("❌ Execution error: %v\n", err)
+						fmt.Printf("❌ %s %v\n", errorColor("Execution error:"), err)
 					} else {
-						fmt.Printf("✅ Server response:\n%s\n", result)
+						fmt.Printf("✅ %s\n%s\n", successColor("Server response:"), result)
 					}
 				} else {
-					// Otherwise, just generate and print the cURL command for the operation
-					curl := gen.GenerateCurl(op.OpType, field, customVars)
-					fmt.Printf("\n# Operation: %s | Field: %s\n%s\n", op.OpType, field.Name, curl)
+					curl := gen.GenerateCurl(op.OpType, field, finalVars)
+
+					fmt.Printf("\n# Operation: %s | Field: %s\n%s\n",
+						infoColor(op.OpType),
+						successColor(field.Name),
+						cmdColor(curl),
+					)
 				}
 			}
 		}
@@ -130,6 +152,7 @@ var generateCmd = &cobra.Command{
 func init() {
 	generateCmd.Flags().StringVarP(&varsStr, "vars", "v", "", "JSON raw with variables (exam. '{\"id\": 1}')")
 	generateCmd.Flags().StringVarP(&varsFile, "var-file", "f", "", "Path to a JSON file containing variables (exam. './vars.json')")
+	generateCmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Interactively fill in variable")
 	// Expose the --run flag to allow users to execute the generated query directly against the endpoint
 	generateCmd.Flags().BoolVarP(&run, "run", "r", false, "Connect to the endpoint and execute the generated query, printing the response")
 	rootCmd.AddCommand(generateCmd)

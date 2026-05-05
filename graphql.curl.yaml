@@ -1,11 +1,11 @@
 # graphql.curl.yaml
-schema: "./example/gql/"  # Path to your GraphQL schema files
+schema: "/home/vsl/go/src/summit/resapi/api/gql"  # Path to your GraphQL schema files
 document_extensions: [".graphql", ".graphqls",".gql"] # Optional: Specify the file extensions for GraphQL documents to include in the generation process (default is .graphqls)
 
-endpoint: "http://localhost:8080/graphql" # GraphQL endpoint URL
+endpoint: "http://localhost:8008/gql/query" # The URL of the GraphQL endpoint to which the generated cURL commands will be sent. This should point to your GraphQL server.
 
 environment:
-  GQL_AUTH_TOKEN: ${KEY} # Environment variable key for the Bearer token, which will be loaded from the .env file
+  GQL_AUTH_TOKEN: ${GQL_AUTH_TOKEN} # Environment variable key for the Bearer token, which will be loaded from the .env file
   MAX_DEPTH: 3 # Optional environment variable for maximum query depth
 
 headers:
