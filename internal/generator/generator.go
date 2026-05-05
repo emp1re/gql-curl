@@ -265,12 +265,11 @@ func (g *Generator) ExecuteQuery(opType string, field *ast.FieldDefinition, cust
 		GotFirstResponseByte: func() { t4 = time.Now() },
 	}
 
-	// Додаємо трейсер у контекст запиту
 	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
 
 	// Send the request with a timeout
 	client := &http.Client{Timeout: 10 * time.Second}
-	t0 = time.Now() // Старт запиту
+	t0 = time.Now()
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", nil, err
@@ -281,9 +280,9 @@ func (g *Generator) ExecuteQuery(opType string, field *ast.FieldDefinition, cust
 	if err != nil {
 		return "", nil, err
 	}
-	t5 := time.Now() // Кінець читання відповіді
+	t5 := time.Now()
 
-	// Розрахунок метрик (з урахуванням того, що при повторному запиті TCP/TLS можуть бути опущені через Keep-Alive)
+	// Calculate metrics based on the recorded timestamps. We check if each timestamp is set before calculating the duration to avoid zero values.
 	metrics := &Metrics{
 		Total: t5.Sub(t0),
 		Size:  int64(len(respBody)),
@@ -299,7 +298,7 @@ func (g *Generator) ExecuteQuery(opType string, field *ast.FieldDefinition, cust
 		metrics.TLS = t3.Sub(tlsStart)
 	}
 	if !t4.IsZero() {
-		// TTFB = час від відправки запиту до отримання першого байта
+		// TTFB = time from the start of the request to the moment we receive the first byte of the response
 		metrics.TTFB = t4.Sub(t0)
 	}
 

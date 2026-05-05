@@ -11,6 +11,7 @@ It also supports schema fetching via GraphQL introspection.
 
 - `--interactive` mode to fill variables from a terminal form.
 - `--run` mode to execute generated operations immediately.
+- Request performance metrics in `--run` mode (Total, TTFB, DNS, TCP, TLS, Size).
 - `--filter` support (gjson syntax) to print only part of a response.
 - Variables from inline JSON (`--vars`) or JSON file (`--var-file`).
 - Header interpolation using `{{environment.KEY}}` values.
@@ -117,13 +118,19 @@ gqc generate createUser --interactive || gqc g createUser -i
 Execute request immediately:
 
 ```bash
-gqc generate getUser --run || gqc g getUser -r -i
+gqc generate getUser --run
 ```
 
 Execute and filter output (gjson path):
 
 ```bash
-gqc generate getUser --run --filter 'data.getUser.name' || gqc g getUser -r -i -f 'data.getUser.name'
+gqc generate getUser --run --filter 'data.getUser.name'
+```
+
+Run with variables and still see performance metrics:
+
+```bash
+gqc generate getUser --run --vars '{"id":"123"}'
 ```
 
 > Note: `--vars` and `--var-file` are mutually exclusive.
@@ -153,6 +160,26 @@ curl -X POST http://localhost:8080/graphql \
 - JSON object/array responses are colorized and pretty-printed.
 - With `--filter`, scalar results are printed as raw values (useful for scripts).
 - If filtered path does not exist, a warning is shown.
+
+## Metrics
+
+When you use `gqc generate ... --run`, the CLI prints a performance block after the response:
+
+- `Total`: full request time (send request + receive/read response body).
+- `TTFB`: time to first byte from the server.
+- `DNS`: DNS lookup duration (can be zero on cached/reused connections).
+- `TCP`: TCP connect duration (can be zero on keep-alive reuse).
+- `TLS`: TLS handshake duration (can be zero for plain HTTP or reused TLS session).
+- `Size`: response body size.
+
+Example:
+
+```text
+📊 Performance Metrics:
+  Total: 123ms  TTFB: 47ms  DNS: 2ms  TCP: 4ms  TLS: 0ms  Size: 3.21 KB
+```
+
+This is useful for quick endpoint latency checks without external tooling.
 
 ## Help
 
