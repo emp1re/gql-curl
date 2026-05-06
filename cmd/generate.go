@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/TylerBrock/colorjson"
@@ -134,7 +136,7 @@ var generateCmd = &cobra.Command{
 					if err != nil {
 						fmt.Printf("❌ %s %v\n", errorColor("Execution error:"), err)
 					} else {
-						fmt.Printf("✅ %s\n", successColor("Server request:"))
+						fmt.Printf("✅ %s\n", successColor("Server response:"))
 
 						// Filter the response using gjson if a filter string is provided; otherwise, print the entire response colorized
 						if filterStr != "" {
@@ -154,6 +156,23 @@ var generateCmd = &cobra.Command{
 						} else {
 							printColorized(resultRaw)
 						}
+
+						if config.EnableLogging {
+
+							var logBuffer strings.Builder
+							logBuffer.WriteString(fmt.Sprintf("=== Operation: %s ===\n", field.Name))
+							logBuffer.WriteString(fmt.Sprintf("Timestamp: %s\n", time.Now().Format(time.RFC3339)))
+							logBuffer.WriteString(fmt.Sprintf("Request:\n%s\n\n", curlQuery))
+							logBuffer.WriteString(fmt.Sprintf("Response:\n%s\n\n", resultRaw))
+
+							err := saveLog(cfg.Output, field.Name, logBuffer.String())
+							if err != nil {
+								fmt.Printf("⚠️ %s %v\n", color.YellowString("Failed to save log:"), err)
+							} else {
+								fmt.Printf("📂 %s %s/logs/\n", color.HiBlackString("Log saved to:"), cfg.Output)
+							}
+						}
+
 						if metrics != nil {
 							metricColor := color.New(color.FgHiMagenta).SprintFunc()
 							valColor := color.New(color.FgWhite, color.Bold).SprintFunc()
@@ -213,6 +232,30 @@ func formatBytes(b int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.2f %cB", float64(b)/float64(div), "KMGTPE"[exp])
+}
+
+func saveLog(basePath string, opName string, content string) error {
+	if basePath == "" {
+		return nil
+	}
+
+	logDir := filepath.Join(basePath, "logs")
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		return fmt.Errorf("❌ Error creating log directory: %w", err)
+	}
+
+	timestamp := time.Now().Format(config.LogFileTimestampFormat)
+	fileName := fmt.Sprintf("%s_%s.log", timestamp, opName)
+	filePath := filepath.Join(logDir, fileName)
+
+	f, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	_, err = f.WriteString(content + "\n")
+	return err
 }
 
 func init() {

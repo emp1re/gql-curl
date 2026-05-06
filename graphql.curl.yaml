@@ -2,11 +2,15 @@
 schema: "/gql"  # Path to your GraphQL schema files
 document_extensions: [".graphql", ".graphqls",".gql"] # Optional: Specify the file extensions for GraphQL documents to include in the generation process (default is .graphqls)
 
+output: "./" # Optional: Directory where the generated cURL commands will be saved (default is current directory)
+
 endpoint: "http://localhost:8080/gql/query" # The URL of the GraphQL endpoint to which the generated cURL commands will be sent
 
 environment:
   GQL_AUTH_TOKEN: ${GQL_AUTH_TOKEN} # Environment variable key for the Bearer token, which will be loaded from the .env file
   MAX_DEPTH: 3 # Optional environment variable for maximum query depth
+  ENABLE_LOGGING: false # Optional environment variable to enable logging
+  LOG_FILE_TIMESTAMP_FORMAT: "2006-01-02_15-04-05" # Optional environment variable for custom timestamp format
 
 headers:
   Authorization: "Bearer {{environment.GQL_AUTH_TOKEN}}" # Use the token from environment variables in the Authorization header

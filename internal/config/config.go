@@ -12,17 +12,20 @@ import (
 
 // MaxDepth defines how deep the generator will expand nested types when building the selection set.
 var (
-	MaxDepth           int = 3
-	DocumentExtensions     = []string{".graphql", ".graphqls"}
+	MaxDepth               int = 3
+	DocumentExtensions         = []string{".graphql", ".graphqls"}
+	EnableLogging          bool
+	LogFileTimestampFormat string = "2006-01-02"
 )
 
 type Config struct {
-	Schema      string            `yaml:"schema"`
-	DocumentExc []string          `yaml:"document_extensions"`
-	Output      string            `yaml:"output"`
-	Endpoint    string            `yaml:"endpoint"`
-	Environment map[string]string `yaml:"environment"`
-	Headers     map[string]string `yaml:"headers"`
+	Schema          string            `yaml:"schema"`
+	DocumentExc     []string          `yaml:"document_extensions"`
+	Output          string            `yaml:"output"`
+	TimestampFormat string            `yaml:"log_file_timestamp_format"`
+	Endpoint        string            `yaml:"endpoint"`
+	Environment     map[string]string `yaml:"environment"`
+	Headers         map[string]string `yaml:"headers"`
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -59,9 +62,17 @@ func (c *Config) interpolateHeaders() {
 		interpolatedValue := headerValue
 
 		for envKey, envVal := range c.Environment {
+
 			if envKey == "MAX_DEPTH" {
 				MaxDepth, _ = strconv.Atoi(envVal)
 			}
+			if envKey == "ENABLE_LOGGING" {
+				EnableLogging, _ = strconv.ParseBool(envVal)
+			}
+			if envKey == "LOG_FILE_TIMESTAMP_FORMAT" {
+				LogFileTimestampFormat = envVal
+			}
+
 			placeholder := fmt.Sprintf("{{environment.%s}}", envKey)
 			interpolatedValue = strings.ReplaceAll(interpolatedValue, placeholder, envVal)
 		}
