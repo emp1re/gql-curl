@@ -61,16 +61,22 @@ go install github.com/emp1re/gql-curl/cmd/gqc@latest
 Create a graphql.curl.yaml in your project root:
 
 ```yaml
-schema: "./schema.graphql"
-endpoint: "http://localhost:8008/gql/query"
-output: "./generated" # Target directory for saved curls
+schema: "/gql"  # Path to your GraphQL schema files
+document_extensions: [".graphql", ".graphqls",".gql"] # Optional: Specify the file extensions for GraphQL documents to include in the generation process (default is .graphqls)
+
+output: "./" # Optional: Directory where the generated cURL commands will be saved (default is current directory)
+
+endpoint: "http://localhost:8080/gql/query" # The URL of the GraphQL endpoint to which the generated cURL commands will be sent
 
 environment:
-  AUTH_TOKEN: "${GQL_TOKEN}" # Loads from your .env or shell
+  GQL_AUTH_TOKEN: ${GQL_AUTH_TOKEN} # Environment variable key for the Bearer token, which will be loaded from the .env file
+  MAX_DEPTH: 3 # Optional environment variable for maximum query depth
+  ENABLE_LOGGING: false # Optional environment variable to enable logging
+  LOG_FILE_TIMESTAMP_FORMAT: "2006-01-02_15-04-05" # Optional environment variable for custom timestamp format
 
 headers:
-  Authorization: "Bearer {{environment.AUTH_TOKEN}}"
-  X-Custom-Header: "GQC-Client"
+  Authorization: "Bearer {{environment.GQL_AUTH_TOKEN}}" # Use the token from environment variables in the Authorization header
+  X-Custom-Header: "GQC-Client" # Use custome headers if needed
 ```
 
 ## 🚀 Quick Start
