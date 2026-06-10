@@ -192,21 +192,45 @@ func (g *Generator) expandType(typ *ast.Type, depth int) string {
 		return ""
 	}
 
-	// For Object, Interface, or Union types, we need to expand their fields
 	var sb strings.Builder
 	sb.WriteString("{ ")
 
+	hasFields := false
 	for _, f := range def.Fields {
-		subSelection := g.expandType(f.Type, depth+1)
+		baseType := f.Type.Name()
+		typeDef := g.Schema.Types[baseType]
 
-		sb.WriteString(f.Name)
-		if subSelection != "" {
-			sb.WriteString(" " + subSelection)
+		if typeDef == nil {
+			continue
 		}
-		sb.WriteString(" ")
+
+		// Check if the field's type is a leaf (Scalar or Enum) or an Object/Interface that requires further expansion
+		isLeaf := typeDef.Kind == ast.Scalar || typeDef.Kind == ast.Enum
+
+		if isLeaf {
+			// SCALAR or ENUM: Add the field name directly to the selection set
+			sb.WriteString(f.Name + " ")
+			hasFields = true
+		} else {
+			// OBJECT or INTERFACE: Attempt to expand further
+			subSelection := g.expandType(f.Type, depth+1)
+
+			// CRITICAL: Add the object field ONLY if we were able to generate nested fields for it.
+			// This prevents the "Field must have a selection of subfields" error.
+			if subSelection != "" {
+				sb.WriteString(fmt.Sprintf("%s %s ", f.Name, subSelection))
+				hasFields = true
+			}
+		}
 	}
 
 	sb.WriteString("}")
+
+	// If no valid fields were found inside the block (e.g., due to depth limit),
+	// return an empty string to prevent the parent field from being rendered invalidly.
+	if !hasFields {
+		return ""
+	}
 	return sb.String()
 }
 
