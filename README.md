@@ -14,7 +14,8 @@ It also supports schema fetching via GraphQL introspection.
 - Request performance metrics in `--run` mode (Total, TTFB, DNS, TCP, TLS, Size).
 - `--filter` support (gjson syntax) to print only part of a response.
 - Variables from inline JSON (`--vars`) or JSON file (`--var-file`).
-- Header interpolation using `{{environment.KEY}}` values.
+- Multiple named schemas with separate paths, endpoints, auth tokens, and headers.
+- Header interpolation using `{{auth_token}}`, `{{environment.KEY}}`, and `${ENV_VAR}` values.
 - Configurable query expansion depth via `environment.MAX_DEPTH`.
 - Configurable schema file extensions via `document_extensions`.
 
@@ -41,7 +42,7 @@ go build -o gqc ./cmd/gqc
 ## Quick Start
 
 1. Create `graphql.curl.yaml` in your working directory.
-2. Point `schema` to your GraphQL schema directory.
+2. Configure one or more entries under `schemas`.
 3. Run `gqc generate`.
 
 ```bash
@@ -60,26 +61,37 @@ The CLI loads `graphql.curl.yaml` from the current directory.
 It also calls `.env` loading automatically (via `godotenv`).
 
 ```yaml
-schema: "./schema"
+schemas:
+  main:
+    path: "/gql"
+    endpoint: "http://localhost:8080/gql/query"
+    auth_token: ${MAIN_AUTH_TOKEN}
+    headers:
+      Authorization: "Bearer {{auth_token}}"
+
+  api:
+    path: "./api/gql/"
+    endpoint: "http://api.service:8080/query"
+    auth_token: ${API_AUTH_TOKEN}
+    headers:
+      Authorization: "Bearer {{auth_token}}"
+      X-API-Key: ${API_KEY}
+
 document_extensions: [".graphql", ".graphqls", ".gql"]
-endpoint: "http://localhost:8080/graphql"
 
 environment:
-  GQL_AUTH_TOKEN: ${GQL_AUTH_TOKEN}
-  MAX_DEPTH: "3"
-
-headers:
-  Authorization: "Bearer {{environment.GQL_AUTH_TOKEN}}"
+  MAX_DEPTH: 3
 ```
 
 ### Field Reference
 
-- `schema` (string): path to schema directory (used by `generate`) or output file/dir target (used by `fetch`).
+- `schemas` (map): named GraphQL schema configs. Commands process all schemas by default, or one schema with `--schema <name>`.
+- `schemas.<name>.path` (string or []string): local schema file/directory path. `generate` parses matching files from this path. `fetch` writes the fetched schema to this path.
+- `schemas.<name>.endpoint` (string): GraphQL server URL for this schema.
+- `schemas.<name>.auth_token` (string): optional token value, usually loaded from `${ENV_VAR}` and available in headers as `{{auth_token}}`.
+- `schemas.<name>.headers` (map): HTTP headers for generated/executed/fetched requests.
 - `document_extensions` ([]string): schema file extensions to parse (for example `.graphql`, `.graphqls`, `.gql`).
-- `endpoint` (string): GraphQL server URL.
 - `environment` (map): values used for interpolation and runtime settings (like `MAX_DEPTH`).
-- `headers` (map): HTTP headers for generated/executed requests.
-- `output` (string): present in config struct, currently not used by commands.
 
 ## Commands
 
@@ -89,6 +101,12 @@ Generate `curl` commands for all root operations:
 
 ```bash
 gqc generate
+```
+
+Generate for one configured schema:
+
+```bash
+gqc generate --schema main || gqc g -s main
 ```
 
 Generate for one operation:
@@ -137,19 +155,25 @@ gqc generate getUser --run --vars '{"id":"123"}'
 
 ### `fetch`
 
-Fetch schema using introspection and save it to `schema` path from config:
+Fetch every configured schema using introspection and save each result to its `path`:
 
 ```bash
 gqc fetch
 ```
 
-If `schema` points to a directory, output is saved as `schema.graphql` in that directory.
+Fetch one configured schema:
+
+```bash
+gqc fetch --schema main || gqc f -s main
+```
+
+If `schemas.<name>.path` points to a directory, output is saved as `schema.graphql` in that directory.
 
 ## Generated Output Example
 
 ```bash
-# Operation: query | Field: getUser
-curl -X POST http://localhost:8080/graphql \
+# Schema: main | Operation: query | Field: getUser
+curl -X POST http://localhost:8080/gql/query \
   -H 'Authorization: Bearer <token>' \
   -H 'Content-Type: application/json' \
   --data-raw '{"query":"query getUser($id: ID!) { getUser(id: $id) { id name } }","variables":{"id":"<ID>"}}'

@@ -16,6 +16,8 @@ import (
 	"github.com/emp1re/gql-curl/internal/config"
 )
 
+var fetchSchema string
+
 var fetchCmd = &cobra.Command{
 	Use:     "fetch",
 	Aliases: []string{"f", "pull"},
@@ -31,42 +33,55 @@ var fetchCmd = &cobra.Command{
 			log.Fatalf("❌ %s %v", errorColor("Load config error:"), err)
 		}
 
-		fmt.Printf("📡 %s %s\n", infoColor("Requesting schema from endpoint:"), cfg.Endpoint)
-
-		// 2. Form headers from config
-		headers := make(http.Header)
-		for k, v := range cfg.Headers {
-			headers.Set(k, v)
-		}
-
-		// 3. Fetch schema with timeout context
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer cancel()
-
-		schemaData, err := gqlfetch.BuildClientSchemaWithHeaders(ctx, cfg.Endpoint, headers, true)
+		schemas, err := cfg.SelectedSchemas(fetchSchema)
 		if err != nil {
-			log.Fatalf("❌ %s %v\nCheck if the endpoint is correct and accessible, and if the required headers are set in the configuration.", errorColor("Failed to fetch schema:"), err)
+			log.Fatalf("❌ %s %v", errorColor("Config error:"), err)
 		}
 
-		// 4. Determine output path
-		outPath := cfg.Schema
-		fileInfo, err := os.Stat(outPath)
+		for _, schemaCfg := range schemas {
+			fmt.Printf("📡 %s %s (%s)\n", infoColor("Requesting schema from endpoint:"), schemaCfg.Config.Endpoint, schemaCfg.Name)
 
-		if err == nil && fileInfo.IsDir() {
-			outPath = filepath.Join(outPath, "schema.graphql")
-		} else if outPath == "" {
-			outPath = "schema.graphql"
+			// 2. Form headers from config
+			headers := make(http.Header)
+			for k, v := range schemaCfg.Config.Headers {
+				headers.Set(k, v)
+			}
+
+			// 3. Fetch schema with timeout context
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			schemaData, err := gqlfetch.BuildClientSchemaWithHeaders(ctx, schemaCfg.Config.Endpoint, headers, true)
+			cancel()
+			if err != nil {
+				log.Fatalf("❌ %s %v\nCheck if the endpoint is correct and accessible, and if the required headers are set in the configuration.", errorColor("Failed to fetch schema:"), err)
+			}
+
+			// 4. Determine output path
+			outPaths := []string(schemaCfg.Config.Path)
+			if len(outPaths) == 0 {
+				outPaths = []string{schemaCfg.Name + ".graphql"}
+			}
+
+			for _, outPath := range outPaths {
+				fileInfo, err := os.Stat(outPath)
+
+				if err == nil && fileInfo.IsDir() {
+					outPath = filepath.Join(outPath, "schema.graphql")
+				} else if outPath == "" {
+					outPath = schemaCfg.Name + ".graphql"
+				}
+
+				err = os.WriteFile(outPath, []byte(schemaData), 0644)
+				if err != nil {
+					log.Fatalf("❌ %s %v", errorColor("Failed to save schema to file:"), err)
+				}
+
+				fmt.Printf("✅ %s %s\n", successColor("Schema successfully saved to:"), outPath)
+			}
 		}
-
-		err = os.WriteFile(outPath, []byte(schemaData), 0644)
-		if err != nil {
-			log.Fatalf("❌ %s %v", errorColor("Failed to save schema to file:"), err)
-		}
-
-		fmt.Printf("✅ %s %s\n", successColor("Schema successfully saved to:"), outPath)
 	},
 }
 
 func init() {
+	fetchCmd.Flags().StringVarP(&fetchSchema, "schema", "s", "", "Schema name from config.schemas to use (default: all)")
 	rootCmd.AddCommand(fetchCmd)
 }

@@ -1,12 +1,21 @@
 # graphql.curl.yaml
-schema: "/gql"  # Path to your GraphQL schema files
-document_extensions: [".graphql", ".graphqls",".gql"] # Optional: Specify the file extensions for GraphQL documents to include in the generation process (default is .graphqls)
+schemas:
+  main:
+    path: "/gql"
+    endpoint: "http://localhost:8080/gql/query"
+    auth_token: ${MAIN_AUTH_TOKEN}
+    headers:
+      Authorization: "Bearer {{auth_token}}"
 
-endpoint: "http://localhost:8080/gql/query" # The URL of the GraphQL endpoint to which the generated cURL commands will be sent
+  api:
+    path: "./api/gql/"
+    endpoint: "http://api.service:8080/query"
+    auth_token: ${API_AUTH_TOKEN}
+    headers:
+      Authorization: "Bearer {{auth_token}}"
+      X-API-Key: ${API_KEY}
+
+document_extensions: [".graphql", ".graphqls", ".gql"]
 
 environment:
-  GQL_AUTH_TOKEN: ${GQL_AUTH_TOKEN} # Environment variable key for the Bearer token, which will be loaded from the .env file
-  MAX_DEPTH: 3 # Optional environment variable for maximum query depth
-
-headers:
-  Authorization: "Bearer {{environment.GQL_AUTH_TOKEN}}" # Use the token from environment variables in the Authorization header
+  MAX_DEPTH: 3

@@ -24,6 +24,7 @@ var (
 	varsFile    string
 	interactive bool
 	filterStr   string
+	genSchema   string
 )
 
 // parseVariables is a helper function that takes either a raw JSON string or a file path to a JSON file, and parses it into a map[string]interface{}.
@@ -68,26 +69,15 @@ var generateCmd = &cobra.Command{
 			log.Fatalf("❌ Load config error: %v", err)
 		}
 
-		// Read and parse the GraphQL schema from the specified directory
-		gql, err := parser.NewParserFromDir(cfg.Schema)
-		if err != nil {
-			log.Fatalf("❌ Parse schema error: %v", err)
-		}
-
 		// Retrieve the target operation name from the command-line arguments, if provided
 		targetOp := ""
 		if len(args) > 0 {
 			targetOp = args[0]
 		}
 
-		gen := generator.NewGenerator(gql.Schema, cfg.Endpoint, cfg.Headers)
-
-		operations := []struct {
-			OpType string
-			Def    *ast.Definition
-		}{
-			{"query", gql.Schema.Query},
-			{"mutation", gql.Schema.Mutation},
+		schemas, err := cfg.SelectedSchemas(genSchema)
+		if err != nil {
+			log.Fatalf("❌ Config error: %v", err)
 		}
 
 		successColor := color.New(color.FgGreen, color.Bold).SprintFunc()
@@ -97,86 +87,108 @@ var generateCmd = &cobra.Command{
 
 		found := false
 
-		for _, op := range operations {
-			if op.Def == nil {
-				continue
+		for _, schemaCfg := range schemas {
+			// Read and parse GraphQL schema sources for the current configured schema.
+			gql, err := parser.NewParserFromPaths([]string(schemaCfg.Config.Path))
+			if err != nil {
+				log.Fatalf("❌ Parse schema '%s' error: %v", schemaCfg.Name, err)
 			}
 
-			for _, field := range op.Def.Fields {
-				// Filter by target operation name if specified
-				if targetOp != "" && field.Name != targetOp {
+			gen := generator.NewGenerator(gql.Schema, schemaCfg.Config.Endpoint, schemaCfg.Config.Headers)
+
+			operations := []struct {
+				OpType string
+				Def    *ast.Definition
+			}{
+				{"query", gql.Schema.Query},
+				{"mutation", gql.Schema.Mutation},
+			}
+
+			for _, op := range operations {
+				if op.Def == nil {
 					continue
 				}
 
-				var finalVars map[string]interface{}
-				var err error
-
-				if interactive && len(field.Arguments) > 0 {
-					// Create an interactive form for filling in variables based on the field's arguments
-					finalVars, err = tui.FillVariablesInteractive(gql.Schema, field.Arguments)
-					if err != nil {
-						log.Fatalf("❌ Input Error: %v", err)
+				for _, field := range op.Def.Fields {
+					// Filter by target operation name if specified
+					if targetOp != "" && field.Name != targetOp {
+						continue
 					}
-				} else if varsStr != "" || varsFile != "" {
-					finalVars, err = parseVariables(varsStr, varsFile)
-				}
 
-				found = true
+					var finalVars map[string]interface{}
+					var err error
 
-				// If the --run flag is set, execute the generated query against the endpoint and print the response
-				if run {
-					fmt.Printf("\n🚀 %s %s...\n", infoColor("Execute request:"), successColor(field.Name))
+					if interactive && len(field.Arguments) > 0 {
+						// Create an interactive form for filling in variables based on the field's arguments
+						finalVars, err = tui.FillVariablesInteractive(gql.Schema, field.Arguments)
+						if err != nil {
+							log.Fatalf("❌ Input Error: %v", err)
+						}
+					} else if varsStr != "" || varsFile != "" {
+						finalVars, err = parseVariables(varsStr, varsFile)
+						if err != nil {
+							log.Fatalf("%v", err)
+						}
+					}
 
-					curlQuery := gen.GenerateCurl(op.OpType, field, finalVars)
-					fmt.Printf("%s\n\n", cmdColor(curlQuery))
+					found = true
 
-					resultRaw, metrics, err := gen.ExecuteQuery(op.OpType, field, finalVars)
-					if err != nil {
-						fmt.Printf("❌ %s %v\n", errorColor("Execution error:"), err)
-					} else {
-						fmt.Printf("✅ %s\n", successColor("Server request:"))
+					// If the --run flag is set, execute the generated query against the endpoint and print the response
+					if run {
+						fmt.Printf("\n🚀 %s %s.%s...\n", infoColor("Execute request:"), successColor(schemaCfg.Name), successColor(field.Name))
 
-						// Filter the response using gjson if a filter string is provided; otherwise, print the entire response colorized
-						if filterStr != "" {
-							parsed := gjson.Get(resultRaw, filterStr)
+						curlQuery := gen.GenerateCurl(op.OpType, field, finalVars)
+						fmt.Printf("%s\n\n", cmdColor(curlQuery))
 
-							if !parsed.Exists() {
-								fmt.Printf("⚠️ %s Path '%s' not found in response\n", errorColor("Attention:"), filterStr)
-							} else {
-								// If the filtered result is an object or array, print it colorized; otherwise, print it as a raw string (useful for bash scripts)
-								if parsed.IsObject() || parsed.IsArray() {
-									printColorized(parsed.Raw)
-								} else {
-									// Raw string output for non-object/array results, which is useful for command-line usage (e.g., in bash scripts)
-									fmt.Println(parsed.String())
-								}
-							}
+						resultRaw, metrics, err := gen.ExecuteQuery(op.OpType, field, finalVars)
+						if err != nil {
+							fmt.Printf("❌ %s %v\n", errorColor("Execution error:"), err)
 						} else {
-							printColorized(resultRaw)
-						}
-						if metrics != nil {
-							metricColor := color.New(color.FgHiMagenta).SprintFunc()
-							valColor := color.New(color.FgWhite, color.Bold).SprintFunc()
+							fmt.Printf("✅ %s\n", successColor("Server request:"))
 
-							fmt.Printf("\n%s\n", metricColor("📊 Performance Metrics:"))
-							fmt.Printf("  %s %s  %s %s  %s %s  %s %s  %s %s  %s %s\n",
-								metricColor("Total:"), valColor(metrics.Total.Round(time.Millisecond)),
-								metricColor("TTFB:"), valColor(metrics.TTFB.Round(time.Millisecond)),
-								metricColor("DNS:"), valColor(metrics.DNS.Round(time.Millisecond)),
-								metricColor("TCP:"), valColor(metrics.TCP.Round(time.Millisecond)),
-								metricColor("TLS:"), valColor(metrics.TLS.Round(time.Millisecond)),
-								metricColor("Size:"), valColor(formatBytes(metrics.Size)),
-							)
+							// Filter the response using gjson if a filter string is provided; otherwise, print the entire response colorized
+							if filterStr != "" {
+								parsed := gjson.Get(resultRaw, filterStr)
+
+								if !parsed.Exists() {
+									fmt.Printf("⚠️ %s Path '%s' not found in response\n", errorColor("Attention:"), filterStr)
+								} else {
+									// If the filtered result is an object or array, print it colorized; otherwise, print it as a raw string (useful for bash scripts)
+									if parsed.IsObject() || parsed.IsArray() {
+										printColorized(parsed.Raw)
+									} else {
+										// Raw string output for non-object/array results, which is useful for command-line usage (e.g., in bash scripts)
+										fmt.Println(parsed.String())
+									}
+								}
+							} else {
+								printColorized(resultRaw)
+							}
+							if metrics != nil {
+								metricColor := color.New(color.FgHiMagenta).SprintFunc()
+								valColor := color.New(color.FgWhite, color.Bold).SprintFunc()
+
+								fmt.Printf("\n%s\n", metricColor("📊 Performance Metrics:"))
+								fmt.Printf("  %s %s  %s %s  %s %s  %s %s  %s %s  %s %s\n",
+									metricColor("Total:"), valColor(metrics.Total.Round(time.Millisecond)),
+									metricColor("TTFB:"), valColor(metrics.TTFB.Round(time.Millisecond)),
+									metricColor("DNS:"), valColor(metrics.DNS.Round(time.Millisecond)),
+									metricColor("TCP:"), valColor(metrics.TCP.Round(time.Millisecond)),
+									metricColor("TLS:"), valColor(metrics.TLS.Round(time.Millisecond)),
+									metricColor("Size:"), valColor(formatBytes(metrics.Size)),
+								)
+							}
 						}
+					} else {
+						curl := gen.GenerateCurl(op.OpType, field, finalVars)
+
+						fmt.Printf("\n# Schema: %s | Operation: %s | Field: %s\n%s\n",
+							successColor(schemaCfg.Name),
+							infoColor(op.OpType),
+							successColor(field.Name),
+							cmdColor(curl),
+						)
 					}
-				} else {
-					curl := gen.GenerateCurl(op.OpType, field, finalVars)
-
-					fmt.Printf("\n# Operation: %s | Field: %s\n%s\n",
-						infoColor(op.OpType),
-						successColor(field.Name),
-						cmdColor(curl),
-					)
 				}
 			}
 		}
@@ -222,5 +234,6 @@ func init() {
 	// Expose the --run flag to allow users to execute the generated query directly against the endpoint
 	generateCmd.Flags().BoolVarP(&run, "run", "r", false, "Connect to the endpoint and execute the generated query, printing the response")
 	generateCmd.Flags().StringVarP(&filterStr, "filter", "q", "", "Path to filter the response using gjson syntax (e.g. 'data.user.name') - works only with --run flag")
+	generateCmd.Flags().StringVarP(&genSchema, "schema", "s", "", "Schema name from config.schemas to use (default: all)")
 	rootCmd.AddCommand(generateCmd)
 }
