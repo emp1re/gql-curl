@@ -3,7 +3,6 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 	"time"
@@ -70,13 +69,25 @@ func parseVariables(vStr, vFile string) (map[string]interface{}, error) {
 var generateCmd = &cobra.Command{
 	Use:     "generate [operationName] [flags]",
 	Aliases: []string{"g", "gen"},
-	Short:   "Generate cURL commands for GraphQL operations defined in the schema",
-	Args:    cobra.MaximumNArgs(1), // Only one optional argument for operation name
-	Run: func(cmd *cobra.Command, args []string) {
+	Short:   "Generate GraphQL requests from schema operations",
+	Long: `Generate ready-to-copy requests for top-level GraphQL query and mutation fields.
+
+By default the command prints curl requests. Use --format postman for a raw JSON
+request body, or --format playground for separate query and variables blocks.`,
+	Example: `  gqc generate
+  gqc generate getUser
+  gqc generate getUser --schema main
+  gqc generate getUser --format postman
+  gqc generate createUser --format playground
+  gqc generate getUser --vars '{"id":"123"}'
+  gqc generate createUser --interactive
+  gqc generate getUser --run --filter 'data.getUser.name'`,
+	Args: maximumNArgsWithHelp(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
 
 		cfg, err := config.LoadConfig("graphql.curl.yaml")
 		if err != nil {
-			log.Fatalf("❌ Load config error: %v", err)
+			return commandError(cmd, "load config error: %v", err)
 		}
 
 		// Retrieve the target operation name from the command-line arguments, if provided
@@ -87,12 +98,12 @@ var generateCmd = &cobra.Command{
 
 		outputFormat, err := normalizeGenerateFormat(genFormat)
 		if err != nil {
-			log.Fatalf("❌ Config error: %v", err)
+			return commandError(cmd, "%v", err)
 		}
 
 		schemas, err := cfg.SelectedSchemas(genSchema)
 		if err != nil {
-			log.Fatalf("❌ Config error: %v", err)
+			return commandError(cmd, "config error: %v", err)
 		}
 
 		successColor := color.New(color.FgGreen, color.Bold).SprintFunc()
@@ -106,7 +117,7 @@ var generateCmd = &cobra.Command{
 			// Read and parse GraphQL schema sources for the current configured schema.
 			gql, err := parser.NewParserFromPaths([]string(schemaCfg.Config.Path))
 			if err != nil {
-				log.Fatalf("❌ Parse schema '%s' error: %v", schemaCfg.Name, err)
+				return commandError(cmd, "parse schema %q error: %v", schemaCfg.Name, err)
 			}
 
 			gen := generator.NewGenerator(gql.Schema, schemaCfg.Config.Endpoint, schemaCfg.Config.Headers)
@@ -137,12 +148,12 @@ var generateCmd = &cobra.Command{
 						// Create an interactive form for filling in variables based on the field's arguments
 						finalVars, err = tui.FillVariablesInteractive(gql.Schema, field.Arguments)
 						if err != nil {
-							log.Fatalf("❌ Input Error: %v", err)
+							return commandError(cmd, "input error: %v", err)
 						}
 					} else if varsStr != "" || varsFile != "" {
 						finalVars, err = parseVariables(varsStr, varsFile)
 						if err != nil {
-							log.Fatalf("%v", err)
+							return commandError(cmd, "%v", err)
 						}
 					}
 
@@ -154,13 +165,13 @@ var generateCmd = &cobra.Command{
 
 						generatedOutput, err := buildGenerateOutput(gen, op.OpType, field, finalVars, outputFormat)
 						if err != nil {
-							log.Fatalf("❌ Generation error: %v", err)
+							return commandError(cmd, "generation error: %v", err)
 						}
 						fmt.Printf("%s\n\n", colorGeneratedOutput(generatedOutput, outputFormat, cmdColor))
 
 						resultRaw, metrics, err := gen.ExecuteQuery(op.OpType, field, finalVars)
 						if err != nil {
-							fmt.Printf("❌ %s %v\n", errorColor("Execution error:"), err)
+							return commandError(cmd, "%s %v", errorColor("execution error:"), err)
 						} else {
 							fmt.Printf("✅ %s\n", successColor("Server request:"))
 
@@ -200,7 +211,7 @@ var generateCmd = &cobra.Command{
 					} else {
 						generatedOutput, err := buildGenerateOutput(gen, op.OpType, field, finalVars, outputFormat)
 						if err != nil {
-							log.Fatalf("❌ Generation error: %v", err)
+							return commandError(cmd, "generation error: %v", err)
 						}
 
 						fmt.Printf("\n# Schema: %s | Operation: %s | Field: %s\n%s\n",
@@ -216,9 +227,10 @@ var generateCmd = &cobra.Command{
 
 		// If a target operation was specified but not found in the schema, log an error
 		if targetOp != "" && !found {
-			log.Fatalf("❌ Operation '%s' not found in schema", targetOp)
+			return commandError(cmd, "operation %q not found in schema", targetOp)
 		}
 
+		return nil
 	},
 }
 

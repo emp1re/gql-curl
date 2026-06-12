@@ -1,13 +1,13 @@
 package cmd
 
 func init() {
-	generateCmd.Flags().StringVarP(&varsStr, "vars", "v", "", "JSON raw with variables (exam. '{\"id\": 1}')")
-	generateCmd.Flags().StringVarP(&varsFile, "var-file", "f", "", "Path to a JSON file containing variables (exam. './vars.json')")
-	generateCmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Interactively fill in variable")
+	generateCmd.Flags().StringVarP(&varsStr, "vars", "v", "", "Inline GraphQL variables JSON, for example '{\"id\":\"123\"}'")
+	generateCmd.Flags().StringVarP(&varsFile, "var-file", "f", "", "Read GraphQL variables from a JSON file")
+	generateCmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Prompt for operation variables in the terminal")
 	// Expose the --run flag to allow users to execute the generated query directly against the endpoint
-	generateCmd.Flags().BoolVarP(&run, "run", "r", false, "Connect to the endpoint and execute the generated query, printing the response")
-	generateCmd.Flags().StringVarP(&filterStr, "filter", "q", "", "Path to filter the response using gjson syntax (e.g. 'data.user.name') - works only with --run flag")
-	generateCmd.Flags().StringVarP(&genSchema, "schema", "s", "", "Schema name from config.schemas to use (default: all)")
-	generateCmd.Flags().StringVarP(&genFormat, "format", "o", "curl", "Output format: curl, payload/json/postman, or playground")
+	generateCmd.Flags().BoolVarP(&run, "run", "r", false, "Execute the generated request against the configured endpoint")
+	generateCmd.Flags().StringVarP(&filterStr, "filter", "q", "", "Filter --run JSON response using gjson syntax, for example 'data.user.name'")
+	generateCmd.Flags().StringVarP(&genSchema, "schema", "s", "", "Use one schema from config.schemas instead of all schemas")
+	generateCmd.Flags().StringVarP(&genFormat, "format", "o", "curl", "Output format: curl, postman/json/payload, or playground")
 	rootCmd.AddCommand(generateCmd)
 }

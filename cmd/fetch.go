@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -21,8 +20,16 @@ var fetchSchema string
 var fetchCmd = &cobra.Command{
 	Use:     "fetch",
 	Aliases: []string{"f", "pull"},
-	Short:   "Fetch the GraphQL schema using Introspection and save it to a file",
-	Run: func(cmd *cobra.Command, args []string) {
+	Short:   "Fetch a GraphQL schema with introspection",
+	Long: `Fetch GraphQL schema SDL from configured endpoints using introspection.
+
+The command reads endpoint and headers from graphql.curl.yaml. If a schema path
+points to a directory, the fetched schema is saved as schema.graphql inside it.`,
+	Example: `  gqc fetch
+  gqc fetch --schema main
+  gqc pull -s api`,
+	Args: noArgsWithHelp,
+	RunE: func(cmd *cobra.Command, args []string) error {
 		infoColor := color.New(color.FgCyan).SprintFunc()
 		successColor := color.New(color.FgGreen, color.Bold).SprintFunc()
 		errorColor := color.New(color.FgRed, color.Bold).SprintFunc()
@@ -30,12 +37,12 @@ var fetchCmd = &cobra.Command{
 		// 1. Load configuration
 		cfg, err := config.LoadConfig("graphql.curl.yaml")
 		if err != nil {
-			log.Fatalf("❌ %s %v", errorColor("Load config error:"), err)
+			return commandError(cmd, "%s %v", errorColor("load config error:"), err)
 		}
 
 		schemas, err := cfg.SelectedSchemas(fetchSchema)
 		if err != nil {
-			log.Fatalf("❌ %s %v", errorColor("Config error:"), err)
+			return commandError(cmd, "%s %v", errorColor("config error:"), err)
 		}
 
 		for _, schemaCfg := range schemas {
@@ -52,7 +59,7 @@ var fetchCmd = &cobra.Command{
 			schemaData, err := gqlfetch.BuildClientSchemaWithHeaders(ctx, schemaCfg.Config.Endpoint, headers, true)
 			cancel()
 			if err != nil {
-				log.Fatalf("❌ %s %v\nCheck if the endpoint is correct and accessible, and if the required headers are set in the configuration.", errorColor("Failed to fetch schema:"), err)
+				return commandError(cmd, "%s %v\nCheck if the endpoint is correct and accessible, and if the required headers are set in the configuration.", errorColor("failed to fetch schema:"), err)
 			}
 
 			// 4. Determine output path
@@ -72,16 +79,18 @@ var fetchCmd = &cobra.Command{
 
 				err = os.WriteFile(outPath, []byte(schemaData), 0644)
 				if err != nil {
-					log.Fatalf("❌ %s %v", errorColor("Failed to save schema to file:"), err)
+					return commandError(cmd, "%s %v", errorColor("failed to save schema to file:"), err)
 				}
 
 				fmt.Printf("✅ %s %s\n", successColor("Schema successfully saved to:"), outPath)
 			}
 		}
+
+		return nil
 	},
 }
 
 func init() {
-	fetchCmd.Flags().StringVarP(&fetchSchema, "schema", "s", "", "Schema name from config.schemas to use (default: all)")
+	fetchCmd.Flags().StringVarP(&fetchSchema, "schema", "s", "", "Use one schema from config.schemas instead of all schemas")
 	rootCmd.AddCommand(fetchCmd)
 }

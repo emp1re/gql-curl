@@ -105,6 +105,66 @@ func TestGenerateCommandPrintsPlaygroundFormatForMutation(t *testing.T) {
 	}
 }
 
+func TestRootHelpIncludesCommonExamples(t *testing.T) {
+	workspace := writeCLIWorkspace(t)
+
+	output := runGQC(t, workspace, "--help")
+
+	for _, want := range []string{
+		"ready-to-copy requests for curl, Postman, and GraphQL Playground",
+		"Examples:",
+		"gqc generate createUser --format playground",
+		"gqc generate getUser --format postman --vars",
+		"Available Commands:",
+		"fetch",
+		"generate",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output does not contain %q:\n%s", want, output)
+		}
+	}
+}
+
+func TestGenerateCommandErrorPrintsHelp(t *testing.T) {
+	workspace := writeCLIWorkspace(t)
+
+	output := runGQCExpectError(t, workspace, "generate", "--format", "unknown")
+
+	for _, want := range []string{
+		`Error: unknown output format "unknown"`,
+		"Usage:",
+		"gqc generate [operationName] [flags]",
+		"Examples:",
+		"gqc generate getUser --format postman",
+		"Flags:",
+		"--format string",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output does not contain %q:\n%s", want, output)
+		}
+	}
+}
+
+func TestFetchCommandErrorPrintsHelp(t *testing.T) {
+	workspace := writeCLIWorkspace(t)
+
+	output := runGQCExpectError(t, workspace, "fetch", "unexpected")
+
+	for _, want := range []string{
+		`Error: unknown argument "unexpected"`,
+		"Usage:",
+		"gqc fetch [flags]",
+		"Examples:",
+		"gqc fetch --schema main",
+		"Flags:",
+		"--schema string",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output does not contain %q:\n%s", want, output)
+		}
+	}
+}
+
 func runGQC(t *testing.T, workspace string, args ...string) string {
 	t.Helper()
 
@@ -121,6 +181,27 @@ func runGQC(t *testing.T, workspace string, args ...string) string {
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("gqc %s failed: %v\n%s", strings.Join(args, " "), err, string(output))
+	}
+
+	return string(output)
+}
+
+func runGQCExpectError(t *testing.T, workspace string, args ...string) string {
+	t.Helper()
+
+	binaryPath := buildGQC(t)
+	cmd := exec.Command(binaryPath, args...)
+	cmd.Dir = workspace
+	cmd.Env = append(os.Environ(),
+		"MAIN_AUTH_TOKEN=main-token",
+		"API_AUTH_TOKEN=api-token",
+		"API_KEY=api-key",
+		"NO_COLOR=1",
+	)
+
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("gqc %s succeeded, want error\n%s", strings.Join(args, " "), string(output))
 	}
 
 	return string(output)

@@ -247,10 +247,15 @@ This is useful for quick endpoint latency checks without external tooling.
 ## Help
 
 ```bash
+gqc
 gqc --help
 gqc generate --help
 gqc fetch --help
 ```
+
+When a command is called with invalid arguments or flags, `gqc` prints the error
+followed by the relevant command help. For example, an invalid generate format
+prints the `generate` usage, examples, and flags.
 
 ## Development
 
