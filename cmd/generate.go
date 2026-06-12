@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/TylerBrock/colorjson"
@@ -25,6 +26,15 @@ var (
 	interactive bool
 	filterStr   string
 	genSchema   string
+	genFormat   string
+)
+
+type generateOutputFormat string
+
+const (
+	generateFormatCurl       generateOutputFormat = "curl"
+	generateFormatPayload    generateOutputFormat = "payload"
+	generateFormatPlayground generateOutputFormat = "playground"
 )
 
 // parseVariables is a helper function that takes either a raw JSON string or a file path to a JSON file, and parses it into a map[string]interface{}.
@@ -73,6 +83,11 @@ var generateCmd = &cobra.Command{
 		targetOp := ""
 		if len(args) > 0 {
 			targetOp = args[0]
+		}
+
+		outputFormat, err := normalizeGenerateFormat(genFormat)
+		if err != nil {
+			log.Fatalf("❌ Config error: %v", err)
 		}
 
 		schemas, err := cfg.SelectedSchemas(genSchema)
@@ -137,8 +152,11 @@ var generateCmd = &cobra.Command{
 					if run {
 						fmt.Printf("\n🚀 %s %s.%s...\n", infoColor("Execute request:"), successColor(schemaCfg.Name), successColor(field.Name))
 
-						curlQuery := gen.GenerateCurl(op.OpType, field, finalVars)
-						fmt.Printf("%s\n\n", cmdColor(curlQuery))
+						generatedOutput, err := buildGenerateOutput(gen, op.OpType, field, finalVars, outputFormat)
+						if err != nil {
+							log.Fatalf("❌ Generation error: %v", err)
+						}
+						fmt.Printf("%s\n\n", colorGeneratedOutput(generatedOutput, outputFormat, cmdColor))
 
 						resultRaw, metrics, err := gen.ExecuteQuery(op.OpType, field, finalVars)
 						if err != nil {
@@ -180,13 +198,16 @@ var generateCmd = &cobra.Command{
 							}
 						}
 					} else {
-						curl := gen.GenerateCurl(op.OpType, field, finalVars)
+						generatedOutput, err := buildGenerateOutput(gen, op.OpType, field, finalVars, outputFormat)
+						if err != nil {
+							log.Fatalf("❌ Generation error: %v", err)
+						}
 
 						fmt.Printf("\n# Schema: %s | Operation: %s | Field: %s\n%s\n",
 							successColor(schemaCfg.Name),
 							infoColor(op.OpType),
 							successColor(field.Name),
-							cmdColor(curl),
+							colorGeneratedOutput(generatedOutput, outputFormat, cmdColor),
 						)
 					}
 				}
@@ -199,6 +220,45 @@ var generateCmd = &cobra.Command{
 		}
 
 	},
+}
+
+func normalizeGenerateFormat(format string) (generateOutputFormat, error) {
+	switch strings.ToLower(strings.TrimSpace(format)) {
+	case "", "curl":
+		return generateFormatCurl, nil
+	case "payload", "json", "postman":
+		return generateFormatPayload, nil
+	case "playground", "pg":
+		return generateFormatPlayground, nil
+	default:
+		return "", fmt.Errorf("unknown output format %q, expected curl, payload/json/postman, or playground", format)
+	}
+}
+
+func buildGenerateOutput(gen *generator.Generator, opType string, field *ast.FieldDefinition, vars map[string]interface{}, format generateOutputFormat) (string, error) {
+	switch format {
+	case generateFormatCurl:
+		return gen.GenerateCurl(opType, field, vars), nil
+	case generateFormatPayload:
+		return gen.GeneratePayloadJSON(opType, field, vars, true)
+	case generateFormatPlayground:
+		variablesJSON, err := gen.GenerateVariablesJSON(field, vars, true)
+		if err != nil {
+			return "", err
+		}
+
+		return fmt.Sprintf("# Query\n%s\n\n# Variables\n%s", gen.BuildOperation(opType, field), variablesJSON), nil
+	default:
+		return "", fmt.Errorf("unsupported output format %q", format)
+	}
+}
+
+func colorGeneratedOutput(output string, format generateOutputFormat, colorize func(a ...interface{}) string) string {
+	if format != generateFormatCurl {
+		return output
+	}
+
+	return colorize(output)
 }
 
 func printColorized(rawJSON string) {
@@ -225,15 +285,4 @@ func formatBytes(b int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.2f %cB", float64(b)/float64(div), "KMGTPE"[exp])
-}
-
-func init() {
-	generateCmd.Flags().StringVarP(&varsStr, "vars", "v", "", "JSON raw with variables (exam. '{\"id\": 1}')")
-	generateCmd.Flags().StringVarP(&varsFile, "var-file", "f", "", "Path to a JSON file containing variables (exam. './vars.json')")
-	generateCmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Interactively fill in variable")
-	// Expose the --run flag to allow users to execute the generated query directly against the endpoint
-	generateCmd.Flags().BoolVarP(&run, "run", "r", false, "Connect to the endpoint and execute the generated query, printing the response")
-	generateCmd.Flags().StringVarP(&filterStr, "filter", "q", "", "Path to filter the response using gjson syntax (e.g. 'data.user.name') - works only with --run flag")
-	generateCmd.Flags().StringVarP(&genSchema, "schema", "s", "", "Schema name from config.schemas to use (default: all)")
-	rootCmd.AddCommand(generateCmd)
 }

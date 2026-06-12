@@ -58,6 +58,53 @@ func TestGenerateCommandProcessesAllNamedSchemasByDefault(t *testing.T) {
 	}
 }
 
+func TestGenerateCommandPrintsPostmanPayloadFormat(t *testing.T) {
+	workspace := writeCLIWorkspace(t)
+
+	output := runGQC(t, workspace, "generate", "--schema", "main", "getUser", "--format", "postman")
+
+	for _, want := range []string{
+		"Schema:",
+		"main",
+		`"query": "query getUser($id: ID!) { getUser(id: $id) { id name } }"`,
+		`"variables": {`,
+		`"id": "<ID>"`,
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output does not contain %q:\n%s", want, output)
+		}
+	}
+
+	if strings.Contains(output, "curl -X POST") {
+		t.Fatalf("payload format should not print curl command:\n%s", output)
+	}
+}
+
+func TestGenerateCommandPrintsPlaygroundFormatForMutation(t *testing.T) {
+	workspace := writeCLIWorkspace(t)
+
+	output := runGQC(t, workspace, "generate", "--schema", "main", "createUser", "--format", "playground")
+
+	for _, want := range []string{
+		"# Query",
+		"mutation createUser($input: CreateUserInput!)",
+		"createUser(input: $input)",
+		"# Variables",
+		`"input": {`,
+		`"name": "<String>"`,
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output does not contain %q:\n%s", want, output)
+		}
+	}
+
+	for _, notWant := range []string{"curl -X POST", `"query":`} {
+		if strings.Contains(output, notWant) {
+			t.Fatalf("playground format should not contain %q:\n%s", notWant, output)
+		}
+	}
+}
+
 func runGQC(t *testing.T, workspace string, args ...string) string {
 	t.Helper()
 
@@ -121,8 +168,16 @@ func writeCLIWorkspace(t *testing.T) string {
 	mkdirAll(t, apiSchemaDir)
 
 	writeFile(t, filepath.Join(mainSchemaDir, "schema.graphql"), `
+input CreateUserInput {
+  name: String!
+}
+
 type Query {
   getUser(id: ID!): User
+}
+
+type Mutation {
+  createUser(input: CreateUserInput!): User
 }
 
 type User {

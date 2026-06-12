@@ -100,13 +100,71 @@ func TestBuildVariablesSkeletonUsesGraphQLDefaults(t *testing.T) {
 	}
 }
 
+func TestBuildPayloadIncludesOperationAndVariablesSkeleton(t *testing.T) {
+	restoreGeneratorMaxDepth(t)
+	config.MaxDepth = 2
+
+	gen, schema := newTestGenerator(t, "http://example.test/graphql", nil)
+	field := schema.Mutation.Fields.ForName("createUser")
+
+	payload := gen.BuildPayload("mutation", field, nil)
+	if got, want := normalizeSpace(payload.Query), "mutation createUser($input: CreateUserInput!) { createUser(input: $input) { id name profile { bio } role } }"; got != want {
+		t.Fatalf("query = %q, want %q", got, want)
+	}
+
+	input, ok := payload.Variables["input"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("variables.input = %#v, want object", payload.Variables["input"])
+	}
+
+	if got, want := input["name"], "<String>"; got != want {
+		t.Fatalf("variables.input.name = %#v, want %#v", got, want)
+	}
+	if got, want := input["role"], "<ENUM: ADMIN>"; got != want {
+		t.Fatalf("variables.input.role = %#v, want %#v", got, want)
+	}
+}
+
+func TestGeneratePayloadJSONCanBePrettyPrinted(t *testing.T) {
+	gen, schema := newTestGenerator(t, "http://example.test/graphql", nil)
+	field := schema.Query.Fields.ForName("user")
+
+	payloadJSON, err := gen.GeneratePayloadJSON("query", field, map[string]interface{}{"id": "42"}, true)
+	if err != nil {
+		t.Fatalf("GeneratePayloadJSON returned error: %v", err)
+	}
+
+	for _, want := range []string{
+		`"query": "query user($id: ID!, $filter: UserFilter)`,
+		`"variables": {`,
+		`"id": "42"`,
+	} {
+		if !strings.Contains(payloadJSON, want) {
+			t.Fatalf("payload JSON does not contain %q:\n%s", want, payloadJSON)
+		}
+	}
+}
+
+func TestGenerateVariablesJSONReturnsEmptyObjectWithoutArguments(t *testing.T) {
+	gen, schema := newTestGenerator(t, "http://example.test/graphql", nil)
+	field := schema.Query.Fields.ForName("ping")
+
+	variablesJSON, err := gen.GenerateVariablesJSON(field, nil, true)
+	if err != nil {
+		t.Fatalf("GenerateVariablesJSON returned error: %v", err)
+	}
+	if got, want := variablesJSON, "{}"; got != want {
+		t.Fatalf("variables JSON = %q, want %q", got, want)
+	}
+}
+
 func TestBuildQueryRespectsMaxDepth(t *testing.T) {
 	restoreGeneratorMaxDepth(t)
 	gen, schema := newTestGenerator(t, "http://example.test/graphql", nil)
 	field := schema.Query.Fields.ForName("user")
 
 	config.MaxDepth = 0
-	if got, want := normalizeSpace(gen.BuildQuery("query", field)), "query { user { id name profile role } }"; got != want {
+	if got, want := normalizeSpace(gen.BuildQuery("query", field)), "query { user { id name role } }"; got != want {
 		t.Fatalf("BuildQuery depth 0 = %q, want %q", got, want)
 	}
 
@@ -221,6 +279,11 @@ input UserFilter {
   tags: [String!]
 }
 
+input CreateUserInput {
+  name: String!
+  role: Role
+}
+
 type Profile {
   bio: String
 }
@@ -235,6 +298,10 @@ type User {
 type Query {
   user(id: ID!, filter: UserFilter): User
   ping: String
+}
+
+type Mutation {
+  createUser(input: CreateUserInput!): User
 }
 `,
 	})

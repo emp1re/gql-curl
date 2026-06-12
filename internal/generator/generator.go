@@ -30,6 +30,11 @@ type Generator struct {
 	Headers  map[string]string
 }
 
+type GraphQLPayload struct {
+	Query     string                 `json:"query"`
+	Variables map[string]interface{} `json:"variables,omitempty"`
+}
+
 func NewGenerator(schema *ast.Schema, endpoint string, headers map[string]string) *Generator {
 	return &Generator{
 		Schema:   schema,
@@ -39,30 +44,10 @@ func NewGenerator(schema *ast.Schema, endpoint string, headers map[string]string
 }
 
 func (g *Generator) GenerateCurl(opType string, field *ast.FieldDefinition, customVars map[string]interface{}) string {
-	query := g.buildOperationString(opType, field)
-
-	// Prepare the JSON payload for the GraphQL request
-	var vars map[string]interface{}
-	if customVars != nil {
-		vars = customVars
-	} else {
-		vars = g.buildVariablesSkeleton(field)
-	}
-
-	payloadMap := map[string]interface{}{
-		"query": query,
-	}
-	if vars != nil && len(vars) > 0 {
-		payloadMap["variables"] = vars
-	}
-
-	var buf bytes.Buffer
-	encoder := json.NewEncoder(&buf)
-	encoder.SetEscapeHTML(false)
-	if err := encoder.Encode(payloadMap); err != nil {
+	payloadString, err := g.GeneratePayloadJSON(opType, field, customVars, false)
+	if err != nil {
 		return fmt.Sprintf("# Generation error JSON: %v", err)
 	}
-	payloadString := strings.TrimSpace(buf.String())
 
 	var sb strings.Builder
 	sb.WriteString("curl -X POST ")
@@ -82,6 +67,58 @@ func (g *Generator) GenerateCurl(opType string, field *ast.FieldDefinition, cust
 	sb.WriteString(fmt.Sprintf("  --data-raw '%s'", payloadString))
 
 	return sb.String()
+}
+
+func (g *Generator) BuildOperation(opType string, field *ast.FieldDefinition) string {
+	return g.buildOperationString(opType, field)
+}
+
+func (g *Generator) BuildVariables(field *ast.FieldDefinition, customVars map[string]interface{}) map[string]interface{} {
+	if customVars != nil {
+		return customVars
+	}
+
+	return g.buildVariablesSkeleton(field)
+}
+
+func (g *Generator) BuildPayload(opType string, field *ast.FieldDefinition, customVars map[string]interface{}) GraphQLPayload {
+	payload := GraphQLPayload{
+		Query: g.BuildOperation(opType, field),
+	}
+
+	vars := g.BuildVariables(field, customVars)
+	if len(vars) > 0 {
+		payload.Variables = vars
+	}
+
+	return payload
+}
+
+func (g *Generator) GeneratePayloadJSON(opType string, field *ast.FieldDefinition, customVars map[string]interface{}, pretty bool) (string, error) {
+	return encodeJSON(g.BuildPayload(opType, field, customVars), pretty)
+}
+
+func (g *Generator) GenerateVariablesJSON(field *ast.FieldDefinition, customVars map[string]interface{}, pretty bool) (string, error) {
+	vars := g.BuildVariables(field, customVars)
+	if vars == nil {
+		vars = map[string]interface{}{}
+	}
+
+	return encodeJSON(vars, pretty)
+}
+
+func encodeJSON(value interface{}, pretty bool) (string, error) {
+	var buf bytes.Buffer
+	encoder := json.NewEncoder(&buf)
+	encoder.SetEscapeHTML(false)
+	if pretty {
+		encoder.SetIndent("", "  ")
+	}
+	if err := encoder.Encode(value); err != nil {
+		return "", err
+	}
+
+	return strings.TrimSpace(buf.String()), nil
 }
 
 // buildOperationString forms the complete GraphQL operation string, including variable definitions and field arguments, based on the provided operation type and field definition.
@@ -236,26 +273,10 @@ func (g *Generator) expandType(typ *ast.Type, depth int) string {
 
 // ExecuteQuery sends the generated GraphQL query to the specified endpoint and returns the pretty-printed JSON response.
 func (g *Generator) ExecuteQuery(opType string, field *ast.FieldDefinition, customVars map[string]interface{}) (string, *Metrics, error) {
-	query := g.buildOperationString(opType, field)
-
-	var vars map[string]interface{}
-	if customVars != nil {
-		vars = customVars
-	} else {
-		vars = g.buildVariablesSkeleton(field)
-	}
-
-	payloadMap := map[string]interface{}{
-		"query": query,
-	}
-	if vars != nil && len(vars) > 0 {
-		payloadMap["variables"] = vars
-	}
-
 	var buf bytes.Buffer
 	encoder := json.NewEncoder(&buf)
 	encoder.SetEscapeHTML(false)
-	if err := encoder.Encode(payloadMap); err != nil {
+	if err := encoder.Encode(g.BuildPayload(opType, field, customVars)); err != nil {
 		return "", nil, fmt.Errorf("encode payload failed: %w", err)
 	}
 

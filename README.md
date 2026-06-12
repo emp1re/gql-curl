@@ -14,6 +14,7 @@ It also supports schema fetching via GraphQL introspection.
 - Request performance metrics in `--run` mode (Total, TTFB, DNS, TCP, TLS, Size).
 - `--filter` support (gjson syntax) to print only part of a response.
 - Variables from inline JSON (`--vars`) or JSON file (`--var-file`).
+- Copy-friendly output formats for Postman JSON payloads and GraphQL Playground query/variables blocks.
 - Multiple named schemas with separate paths, endpoints, auth tokens, and headers.
 - Header interpolation using `{{auth_token}}`, `{{environment.KEY}}`, and `${ENV_VAR}` values.
 - Configurable query expansion depth via `environment.MAX_DEPTH`.
@@ -151,6 +152,18 @@ Run with variables and still see performance metrics:
 gqc generate getUser --run --vars '{"id":"123"}'
 ```
 
+Print a Postman-ready raw JSON body:
+
+```bash
+gqc generate getUser --format postman
+```
+
+Print separate query and variables blocks for GraphQL Playground:
+
+```bash
+gqc generate getUser --format playground
+```
+
 > Note: `--vars` and `--var-file` are mutually exclusive.
 
 ### `fetch`
@@ -171,12 +184,38 @@ If `schemas.<name>.path` points to a directory, output is saved as `schema.graph
 
 ## Generated Output Example
 
+Default `curl` output:
+
 ```bash
 # Schema: main | Operation: query | Field: getUser
 curl -X POST http://localhost:8080/gql/query \
   -H 'Authorization: Bearer <token>' \
   -H 'Content-Type: application/json' \
   --data-raw '{"query":"query getUser($id: ID!) { getUser(id: $id) { id name } }","variables":{"id":"<ID>"}}'
+```
+
+Postman payload output:
+
+```json
+{
+  "query": "query getUser($id: ID!) { getUser(id: $id) { id name } }",
+  "variables": {
+    "id": "<ID>"
+  }
+}
+```
+
+Playground output:
+
+```graphql
+# Query
+query getUser($id: ID!) { getUser(id: $id) { id name } }
+```
+
+```json
+{
+  "id": "<ID>"
+}
 ```
 
 ## Runtime Response Behavior (`--run`)
