@@ -14,7 +14,8 @@ import (
 )
 
 type GQLParser struct {
-	Schema *ast.Schema
+	Schema  *ast.Schema
+	Sources []*ast.Source
 }
 
 func NewParserFromDir(rootPath string) (*GQLParser, error) {
@@ -58,7 +59,7 @@ func newParserFromSources(sources []*ast.Source, searchedPaths []string) (*GQLPa
 		return nil, fmt.Errorf("schema validation error: %s", gqlErr.Error())
 	}
 
-	return &GQLParser{Schema: schema}, nil
+	return &GQLParser{Schema: schema, Sources: sources}, nil
 }
 
 func normalizeRootPaths(rootPaths []string) []string {

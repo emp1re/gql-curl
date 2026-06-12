@@ -22,6 +22,7 @@ It can also execute generated operations directly against the configured endpoin
   gqc generate createUser --format playground
   gqc generate getUser --format postman --vars '{"id":"123"}'
   gqc generate getUser --run --filter 'data.getUser.name'
+  gqc postman --schema main --file center.graphqls --out center.postman_collection.json
   gqc fetch --schema main`,
 	Run: func(cmd *cobra.Command, args []string) {
 		_ = cmd.Help()

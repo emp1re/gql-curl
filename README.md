@@ -3,6 +3,7 @@
 `gqc` is a Go CLI that reads your GraphQL schema and helps you either:
 
 - generate ready-to-run `curl` requests for top-level `query` and `mutation` fields, or
+- generate Postman collections for schema operations, or
 - execute those generated operations directly against your endpoint.
 
 It also supports schema fetching via GraphQL introspection.
@@ -15,6 +16,7 @@ It also supports schema fetching via GraphQL introspection.
 - `--filter` support (gjson syntax) to print only part of a response.
 - Variables from inline JSON (`--vars`) or JSON file (`--var-file`).
 - Copy-friendly output formats for Postman JSON payloads and GraphQL Playground query/variables blocks.
+- Postman Collection v2.1 export with folders per schema file and requests per query/mutation.
 - Multiple named schemas with separate paths, endpoints, auth tokens, and headers.
 - Header interpolation using `{{auth_token}}`, `{{environment.KEY}}`, and `${ENV_VAR}` values.
 - Configurable query expansion depth via `environment.MAX_DEPTH`.
@@ -166,6 +168,45 @@ gqc generate getUser --format playground
 
 > Note: `--vars` and `--var-file` are mutually exclusive.
 
+### `postman`
+
+Generate a Postman Collection v2.1 file for every configured schema:
+
+```bash
+gqc postman
+```
+
+Generate only one configured schema from `graphql.curl.yaml`:
+
+```bash
+gqc postman --schema main
+```
+
+Generate only operations declared in one schema file:
+
+```bash
+gqc postman --schema main --file center.graphqls
+```
+
+Write to a custom collection path:
+
+```bash
+gqc postman --schema main --file center.graphqls --out center.postman_collection.json
+```
+
+Print the collection JSON to stdout:
+
+```bash
+gqc postman --out -
+```
+
+The generated collection uses:
+
+- folders named from schema files, for example `center.graphqls`;
+- one request per top-level `query` or `mutation` field;
+- the endpoint URL from `schemas.<name>.endpoint`;
+- headers from `schemas.<name>.headers` after `.env`, `${ENV_VAR}`, and `{{auth_token}}` interpolation.
+
 ### `fetch`
 
 Fetch every configured schema using introspection and save each result to its `path`:
@@ -250,6 +291,7 @@ This is useful for quick endpoint latency checks without external tooling.
 gqc
 gqc --help
 gqc generate --help
+gqc postman --help
 gqc fetch --help
 ```
 
@@ -264,5 +306,6 @@ Run without installing:
 ```bash
 go run ./cmd/gqc --help
 go run ./cmd/gqc generate --help
+go run ./cmd/gqc postman --help
 go run ./cmd/gqc fetch --help
 ```

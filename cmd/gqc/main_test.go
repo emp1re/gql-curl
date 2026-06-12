@@ -115,9 +115,11 @@ func TestRootHelpIncludesCommonExamples(t *testing.T) {
 		"Examples:",
 		"gqc generate createUser --format playground",
 		"gqc generate getUser --format postman --vars",
+		"gqc postman --schema main --file center.graphqls",
 		"Available Commands:",
 		"fetch",
 		"generate",
+		"postman",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("output does not contain %q:\n%s", want, output)
@@ -165,18 +167,102 @@ func TestFetchCommandErrorPrintsHelp(t *testing.T) {
 	}
 }
 
+func TestPostmanCommandWritesSelectedSchemaFileCollection(t *testing.T) {
+	workspace := writeCLIWorkspace(t)
+	outPath := filepath.Join(workspace, "center.postman_collection.json")
+
+	output := runGQC(t, workspace, "postman", "--schema", "main", "--file", "center.graphqls", "--out", outPath)
+	if !strings.Contains(output, "Postman collection written to: "+outPath) {
+		t.Fatalf("output does not report collection path:\n%s", output)
+	}
+
+	data, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("read collection: %v", err)
+	}
+	collection := string(data)
+
+	for _, want := range []string{
+		`"name": "main"`,
+		`"name": "center.graphqls"`,
+		`"name": "query getUser"`,
+		`"name": "mutation createUser"`,
+		`"url": "http://main.test/graphql"`,
+		`"key": "Authorization"`,
+		`"value": "Bearer main-token"`,
+		`"key": "Content-Type"`,
+		`"mode": "graphql"`,
+		`"query": "query getUser($id: ID!)`,
+		`"variables": "{\n  \"id\": \"<ID>\"\n}"`,
+	} {
+		if !strings.Contains(collection, want) {
+			t.Fatalf("collection does not contain %q:\n%s", want, collection)
+		}
+	}
+
+	for _, notWant := range []string{"apiPing", "http://api.test/graphql", "api-key"} {
+		if strings.Contains(collection, notWant) {
+			t.Fatalf("collection contains %q but selected schema file was main/center.graphqls:\n%s", notWant, collection)
+		}
+	}
+}
+
+func TestPostmanCommandGeneratesAllSchemasByDefault(t *testing.T) {
+	workspace := writeCLIWorkspace(t)
+	outPath := filepath.Join(workspace, "all.postman_collection.json")
+
+	runGQC(t, workspace, "postman", "--out", outPath)
+
+	data, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("read collection: %v", err)
+	}
+	collection := string(data)
+
+	for _, want := range []string{
+		`"name": "GraphQL APIs"`,
+		`"name": "main"`,
+		`"name": "center.graphqls"`,
+		`"name": "api"`,
+		`"name": "api.graphql"`,
+		`"name": "query apiPing"`,
+		`"url": "http://api.test/graphql"`,
+		`"key": "X-API-Key"`,
+		`"value": "api-key"`,
+	} {
+		if !strings.Contains(collection, want) {
+			t.Fatalf("collection does not contain %q:\n%s", want, collection)
+		}
+	}
+}
+
+func TestPostmanCommandErrorPrintsHelp(t *testing.T) {
+	workspace := writeCLIWorkspace(t)
+
+	output := runGQCExpectError(t, workspace, "postman", "--file", "missing.graphqls")
+
+	for _, want := range []string{
+		`Error: schema file "missing.graphqls" was not found in selected schema paths`,
+		"Usage:",
+		"gqc postman [flags]",
+		"Examples:",
+		"gqc postman --schema main --file center.graphqls",
+		"Flags:",
+		"--file string",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output does not contain %q:\n%s", want, output)
+		}
+	}
+}
+
 func runGQC(t *testing.T, workspace string, args ...string) string {
 	t.Helper()
 
 	binaryPath := buildGQC(t)
 	cmd := exec.Command(binaryPath, args...)
 	cmd.Dir = workspace
-	cmd.Env = append(os.Environ(),
-		"MAIN_AUTH_TOKEN=main-token",
-		"API_AUTH_TOKEN=api-token",
-		"API_KEY=api-key",
-		"NO_COLOR=1",
-	)
+	cmd.Env = cliEnv()
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -192,12 +278,7 @@ func runGQCExpectError(t *testing.T, workspace string, args ...string) string {
 	binaryPath := buildGQC(t)
 	cmd := exec.Command(binaryPath, args...)
 	cmd.Dir = workspace
-	cmd.Env = append(os.Environ(),
-		"MAIN_AUTH_TOKEN=main-token",
-		"API_AUTH_TOKEN=api-token",
-		"API_KEY=api-key",
-		"NO_COLOR=1",
-	)
+	cmd.Env = cliEnv()
 
 	output, err := cmd.CombinedOutput()
 	if err == nil {
@@ -205,6 +286,21 @@ func runGQCExpectError(t *testing.T, workspace string, args ...string) string {
 	}
 
 	return string(output)
+}
+
+func cliEnv() []string {
+	env := make([]string, 0, len(os.Environ())+1)
+	for _, item := range os.Environ() {
+		key := strings.SplitN(item, "=", 2)[0]
+		switch key {
+		case "MAIN_AUTH_TOKEN", "API_AUTH_TOKEN", "API_KEY":
+			continue
+		default:
+			env = append(env, item)
+		}
+	}
+
+	return append(env, "NO_COLOR=1")
 }
 
 func buildGQC(t *testing.T) string {
@@ -248,17 +344,9 @@ func writeCLIWorkspace(t *testing.T) string {
 	mkdirAll(t, mainSchemaDir)
 	mkdirAll(t, apiSchemaDir)
 
-	writeFile(t, filepath.Join(mainSchemaDir, "schema.graphql"), `
+	writeFile(t, filepath.Join(mainSchemaDir, "types.graphqls"), `
 input CreateUserInput {
   name: String!
-}
-
-type Query {
-  getUser(id: ID!): User
-}
-
-type Mutation {
-  createUser(input: CreateUserInput!): User
 }
 
 type User {
@@ -266,10 +354,24 @@ type User {
   name: String
 }
 `)
-	writeFile(t, filepath.Join(apiSchemaDir, "schema.graphql"), `
+	writeFile(t, filepath.Join(mainSchemaDir, "center.graphqls"), `
+type Query {
+  getUser(id: ID!): User
+}
+
+type Mutation {
+  createUser(input: CreateUserInput!): User
+}
+`)
+	writeFile(t, filepath.Join(apiSchemaDir, "api.graphql"), `
 type Query {
   apiPing: String
 }
+`)
+	writeFile(t, filepath.Join(workspace, ".env"), `
+MAIN_AUTH_TOKEN=main-token
+API_AUTH_TOKEN=api-token
+API_KEY=api-key
 `)
 
 	writeFile(t, filepath.Join(workspace, "graphql.curl.yaml"), `
