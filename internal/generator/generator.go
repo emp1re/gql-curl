@@ -126,11 +126,8 @@ func (g *Generator) buildOperationString(opType string, field *ast.FieldDefiniti
 	var varDefs []string
 	var fieldArgs []string
 
-	// Review the field's arguments to build variable definitions and field arguments
 	for _, arg := range field.Arguments {
-		// For variable definitions: $id: ID!
 		varDefs = append(varDefs, fmt.Sprintf("$%s: %s", arg.Name, arg.Type.String()))
-		// For field arguments: id: $id
 		fieldArgs = append(fieldArgs, fmt.Sprintf("%s: $%s", arg.Name, arg.Name))
 	}
 
@@ -144,10 +141,13 @@ func (g *Generator) buildOperationString(opType string, field *ast.FieldDefiniti
 		fieldArgsStr = "(" + strings.Join(fieldArgs, ", ") + ")"
 	}
 
-	selection := g.expandType(field.Type, 0)
+	rootField := fmt.Sprintf("%s%s", field.Name, fieldArgsStr)
+	selection := g.expandTypeFormatted(field.Type, 0, 1)
+	if selection != "" {
+		rootField = fmt.Sprintf("%s %s", rootField, selection)
+	}
 
-	// Form the full operation string, e.g. "query getUser($id: ID!) { getUser(id: $id) { id name } }"
-	return fmt.Sprintf("%s %s%s { %s%s %s }", opType, field.Name, varDefStr, field.Name, fieldArgsStr, selection)
+	return fmt.Sprintf("%s %s%s {\n%s%s\n}", opType, field.Name, varDefStr, indent(1), rootField)
 }
 
 // buildVariablesSkeleton generates a skeleton of variables for the given field's arguments, assigning default values based on their types.
@@ -269,6 +269,46 @@ func (g *Generator) expandType(typ *ast.Type, depth int) string {
 		return ""
 	}
 	return sb.String()
+}
+
+func (g *Generator) expandTypeFormatted(typ *ast.Type, depth int, fieldIndent int) string {
+	if depth > config.MaxDepth {
+		return ""
+	}
+
+	def, ok := g.Schema.Types[typ.Name()]
+	if !ok || def.Kind == ast.Scalar || def.Kind == ast.Enum {
+		return ""
+	}
+
+	var lines []string
+	for _, f := range def.Fields {
+		typeDef := g.Schema.Types[f.Type.Name()]
+		if typeDef == nil {
+			continue
+		}
+
+		fieldLine := indent(fieldIndent + 1)
+		if typeDef.Kind == ast.Scalar || typeDef.Kind == ast.Enum {
+			lines = append(lines, fieldLine+f.Name)
+			continue
+		}
+
+		subSelection := g.expandTypeFormatted(f.Type, depth+1, fieldIndent+1)
+		if subSelection != "" {
+			lines = append(lines, fieldLine+f.Name+" "+subSelection)
+		}
+	}
+
+	if len(lines) == 0 {
+		return ""
+	}
+
+	return "{\n" + strings.Join(lines, "\n") + "\n" + indent(fieldIndent) + "}"
+}
+
+func indent(level int) string {
+	return strings.Repeat("  ", level)
 }
 
 // ExecuteQuery sends the generated GraphQL query to the specified endpoint and returns the pretty-printed JSON response.

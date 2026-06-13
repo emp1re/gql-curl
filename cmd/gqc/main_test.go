@@ -66,7 +66,7 @@ func TestGenerateCommandPrintsPostmanPayloadFormat(t *testing.T) {
 	for _, want := range []string{
 		"Schema:",
 		"main",
-		`"query": "query getUser($id: ID!) { getUser(id: $id) { id name } }"`,
+		`"query": "query getUser($id: ID!) {\n  getUser(id: $id) {\n    id\n    name\n  }\n}"`,
 		`"variables": {`,
 		`"id": "<ID>"`,
 	} {
@@ -89,6 +89,9 @@ func TestGenerateCommandPrintsPlaygroundFormatForMutation(t *testing.T) {
 		"# Query",
 		"mutation createUser($input: CreateUserInput!)",
 		"createUser(input: $input)",
+		"  createUser(input: $input) {",
+		"    id",
+		"    name",
 		"# Variables",
 		`"input": {`,
 		`"name": "<String>"`,
@@ -193,6 +196,7 @@ func TestPostmanCommandWritesSelectedSchemaFileCollection(t *testing.T) {
 		`"key": "Content-Type"`,
 		`"mode": "graphql"`,
 		`"query": "query getUser($id: ID!)`,
+		`\n  getUser(id: $id) {\n    id\n    name\n  }\n}`,
 		`"variables": "{\n  \"id\": \"<ID>\"\n}"`,
 	} {
 		if !strings.Contains(collection, want) {

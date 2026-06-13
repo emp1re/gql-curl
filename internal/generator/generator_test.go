@@ -125,6 +125,28 @@ func TestBuildPayloadIncludesOperationAndVariablesSkeleton(t *testing.T) {
 	}
 }
 
+func TestBuildOperationFormatsGraphQLWithIndentation(t *testing.T) {
+	restoreGeneratorMaxDepth(t)
+	config.MaxDepth = 2
+
+	gen, schema := newTestGenerator(t, "http://example.test/graphql", nil)
+	field := schema.Query.Fields.ForName("user")
+
+	want := `query user($id: ID!, $filter: UserFilter) {
+  user(id: $id, filter: $filter) {
+    id
+    name
+    profile {
+      bio
+    }
+    role
+  }
+}`
+	if got := gen.BuildOperation("query", field); got != want {
+		t.Fatalf("BuildOperation = %q, want %q", got, want)
+	}
+}
+
 func TestGeneratePayloadJSONCanBePrettyPrinted(t *testing.T) {
 	gen, schema := newTestGenerator(t, "http://example.test/graphql", nil)
 	field := schema.Query.Fields.ForName("user")

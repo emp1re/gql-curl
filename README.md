@@ -204,6 +204,7 @@ The generated collection uses:
 
 - folders named from schema files, for example `center.graphqls`;
 - one request per top-level `query` or `mutation` field;
+- readable multiline GraphQL queries in each Postman GraphQL body;
 - the endpoint URL from `schemas.<name>.endpoint`;
 - headers from `schemas.<name>.headers` after `.env`, `${ENV_VAR}`, and `{{auth_token}}` interpolation.
 
@@ -232,14 +233,14 @@ Default `curl` output:
 curl -X POST http://localhost:8080/gql/query \
   -H 'Authorization: Bearer <token>' \
   -H 'Content-Type: application/json' \
-  --data-raw '{"query":"query getUser($id: ID!) { getUser(id: $id) { id name } }","variables":{"id":"<ID>"}}'
+  --data-raw '{"query":"query getUser($id: ID!) {\n  getUser(id: $id) {\n    id\n    name\n  }\n}","variables":{"id":"<ID>"}}'
 ```
 
 Postman payload output:
 
 ```json
 {
-  "query": "query getUser($id: ID!) { getUser(id: $id) { id name } }",
+  "query": "query getUser($id: ID!) {\n  getUser(id: $id) {\n    id\n    name\n  }\n}",
   "variables": {
     "id": "<ID>"
   }
@@ -250,7 +251,12 @@ Playground output:
 
 ```graphql
 # Query
-query getUser($id: ID!) { getUser(id: $id) { id name } }
+query getUser($id: ID!) {
+  getUser(id: $id) {
+    id
+    name
+  }
+}
 ```
 
 ```json
