@@ -9,5 +9,6 @@ func init() {
 	generateCmd.Flags().StringVarP(&filterStr, "filter", "q", "", "Filter --run JSON response using gjson syntax, for example 'data.user.name'")
 	generateCmd.Flags().StringVarP(&genSchema, "schema", "s", "", "Use one schema from config.schemas instead of all schemas")
 	generateCmd.Flags().StringVarP(&genFormat, "format", "o", "curl", "Output format: curl, postman/json/payload, or playground")
+	registerGenerateCompletions(generateCmd)
 	rootCmd.AddCommand(generateCmd)
 }

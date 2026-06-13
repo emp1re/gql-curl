@@ -119,6 +119,7 @@ func init() {
 	postmanCmd.Flags().StringVarP(&postmanFile, "file", "f", "", "Include only operations declared in this schema file, for example center.graphqls")
 	postmanCmd.Flags().StringVarP(&postmanOut, "out", "o", "postman_collection.json", "Output collection path, or '-' to print JSON to stdout")
 	postmanCmd.Flags().StringVarP(&postmanName, "name", "n", "", "Postman collection name")
+	registerSchemaFlagCompletion(postmanCmd, "schema")
 	rootCmd.AddCommand(postmanCmd)
 }
 

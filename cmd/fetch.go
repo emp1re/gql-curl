@@ -92,5 +92,6 @@ points to a directory, the fetched schema is saved as schema.graphql inside it.`
 
 func init() {
 	fetchCmd.Flags().StringVarP(&fetchSchema, "schema", "s", "", "Use one schema from config.schemas instead of all schemas")
+	registerSchemaFlagCompletion(fetchCmd, "schema")
 	rootCmd.AddCommand(fetchCmd)
 }

@@ -122,15 +122,7 @@ request body, or --format playground for separate query and variables blocks.`,
 
 			gen := generator.NewGenerator(gql.Schema, schemaCfg.Config.Endpoint, schemaCfg.Config.Headers)
 
-			operations := []struct {
-				OpType string
-				Def    *ast.Definition
-			}{
-				{"query", gql.Schema.Query},
-				{"mutation", gql.Schema.Mutation},
-			}
-
-			for _, op := range operations {
+			for _, op := range rootOperationDefinitions(gql.Schema) {
 				if op.Def == nil {
 					continue
 				}

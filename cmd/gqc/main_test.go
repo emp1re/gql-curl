@@ -120,9 +120,79 @@ func TestRootHelpIncludesCommonExamples(t *testing.T) {
 		"gqc generate getUser --format postman --vars",
 		"gqc postman --schema main --file center.graphqls",
 		"Available Commands:",
+		"completion",
 		"fetch",
 		"generate",
 		"postman",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output does not contain %q:\n%s", want, output)
+		}
+	}
+}
+
+func TestCompletionCommandGeneratesBashScript(t *testing.T) {
+	workspace := writeCLIWorkspace(t)
+
+	output := runGQC(t, workspace, "completion", "bash")
+
+	for _, want := range []string{
+		"bash completion V2 for gqc",
+		"__start_gqc",
+		"__complete",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output does not contain %q:\n%s", want, output)
+		}
+	}
+}
+
+func TestGenerateCommandCompletesOperationNames(t *testing.T) {
+	workspace := writeCLIWorkspace(t)
+
+	output := runGQC(t, workspace, "__complete", "generate", "")
+
+	for _, want := range []string{
+		"apiPing\tquery in api",
+		"createUser\tmutation in main",
+		"getUser\tquery in main",
+		":4",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output does not contain %q:\n%s", want, output)
+		}
+	}
+}
+
+func TestGenerateCommandCompletesOperationNamesForSelectedSchema(t *testing.T) {
+	workspace := writeCLIWorkspace(t)
+
+	output := runGQC(t, workspace, "__complete", "generate", "--schema", "main", "")
+
+	for _, want := range []string{
+		"createUser\tmutation in main",
+		"getUser\tquery in main",
+		":4",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output does not contain %q:\n%s", want, output)
+		}
+	}
+
+	if strings.Contains(output, "apiPing") {
+		t.Fatalf("completion contains apiPing but selected schema was main:\n%s", output)
+	}
+}
+
+func TestGenerateCommandCompletesSchemaFlag(t *testing.T) {
+	workspace := writeCLIWorkspace(t)
+
+	output := runGQC(t, workspace, "__complete", "generate", "--schema", "")
+
+	for _, want := range []string{
+		"api\tschema from graphql.curl.yaml",
+		"main\tschema from graphql.curl.yaml",
+		":4",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("output does not contain %q:\n%s", want, output)

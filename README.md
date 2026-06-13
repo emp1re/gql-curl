@@ -62,6 +62,42 @@ Generate one operation only:
 gqc generate getUser
 ```
 
+## Shell Completion
+
+`gqc` can complete command names, flags, configured schema names, and top-level
+GraphQL `query`/`mutation` operation names from your local schema.
+
+For the current Bash session:
+
+```bash
+source <(gqc completion bash)
+```
+
+For Zsh:
+
+```bash
+gqc completion zsh > "${fpath[1]}/_gqc"
+```
+
+For Fish:
+
+```bash
+gqc completion fish > ~/.config/fish/completions/gqc.fish
+```
+
+For PowerShell:
+
+```powershell
+gqc completion powershell | Out-String | Invoke-Expression
+```
+
+After loading completion, operation names are suggested directly in the terminal:
+
+```bash
+gqc generate <TAB>
+gqc generate --schema main <TAB>
+```
+
 ## Configuration (`graphql.curl.yaml`)
 
 The CLI loads `graphql.curl.yaml` from the current directory.
