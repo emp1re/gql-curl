@@ -259,9 +259,18 @@ func buildGenerateOutput(gen *generator.Generator, opType string, field *ast.Fie
 			return "", err
 		}
 
-		return fmt.Sprintf("# Query\n%s\n\n# Variables\n%s", gen.BuildOperation(opType, field), variablesJSON), nil
+		return fmt.Sprintf("%s\n%s\n\n# Variables\n%s", playgroundOperationHeader(opType), gen.BuildOperation(opType, field), variablesJSON), nil
 	default:
 		return "", fmt.Errorf("unsupported output format %q", format)
+	}
+}
+
+func playgroundOperationHeader(opType string) string {
+	switch strings.ToLower(opType) {
+	case "mutation":
+		return "# Mutation"
+	default:
+		return "# Query"
 	}
 }
 
@@ -283,16 +292,20 @@ func colorPlaygroundOutput(output string) string {
 
 	const separator = "\n\n# Variables\n"
 	parts := strings.SplitN(output, separator, 2)
-	if len(parts) != 2 || !strings.HasPrefix(parts[0], "# Query\n") {
+	if len(parts) != 2 {
+		return output
+	}
+
+	header, query, ok := strings.Cut(parts[0], "\n")
+	if !ok || (header != "# Query" && header != "# Mutation") {
 		return output
 	}
 
 	headerColor := color.New(color.FgCyan, color.Bold).SprintFunc()
 	queryColor := color.New(color.FgYellow).SprintFunc()
 
-	query := strings.TrimPrefix(parts[0], "# Query\n")
 	return fmt.Sprintf("%s\n%s\n\n%s\n%s",
-		headerColor("# Query"),
+		headerColor(header),
 		queryColor(query),
 		headerColor("# Variables"),
 		colorizeJSONString(parts[1]),

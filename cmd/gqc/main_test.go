@@ -86,7 +86,7 @@ func TestGenerateCommandPrintsPlaygroundFormatForMutation(t *testing.T) {
 	output := runGQC(t, workspace, "generate", "--schema", "main", "createUser", "--format", "playground")
 
 	for _, want := range []string{
-		"# Query",
+		"# Mutation",
 		"mutation createUser($input: CreateUserInput!)",
 		"createUser(input: $input)",
 		"  createUser(input: $input) {",
