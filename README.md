@@ -26,6 +26,10 @@ It also supports schema fetching via GraphQL introspection.
 
 - Go `1.25.5` (from `go.mod`).
 
+## Demo
+
+![gqc usage demo](docs/assets/gql-curl-demo.gif)
+
 ## Install
 
 ### Option 1: Install from module
