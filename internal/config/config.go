@@ -133,23 +133,50 @@ func (c *Config) SchemaNames() []string {
 	return names
 }
 
-func (c *Config) SelectedSchemas(schemaName string) ([]NamedSchema, error) {
-	if schemaName != "" {
-		schema, ok := c.Schemas[schemaName]
-		if !ok {
-			return nil, fmt.Errorf("schema %q is not configured", schemaName)
+func (c *Config) SelectedSchemas(schemaNames ...string) ([]NamedSchema, error) {
+	names := NormalizeSchemaNames(schemaNames)
+	if len(names) > 0 {
+		schemas := make([]NamedSchema, 0, len(names))
+		for _, name := range names {
+			schema, ok := c.Schemas[name]
+			if !ok {
+				return nil, fmt.Errorf("schema %q is not configured", name)
+			}
+
+			schemas = append(schemas, NamedSchema{Name: name, Config: schema})
 		}
 
-		return []NamedSchema{{Name: schemaName, Config: schema}}, nil
+		return schemas, nil
 	}
 
-	names := c.SchemaNames()
+	names = c.SchemaNames()
 	schemas := make([]NamedSchema, 0, len(names))
 	for _, name := range names {
 		schemas = append(schemas, NamedSchema{Name: name, Config: c.Schemas[name]})
 	}
 
 	return schemas, nil
+}
+
+func NormalizeSchemaNames(schemaNames []string) []string {
+	var names []string
+	seen := make(map[string]struct{})
+	for _, item := range schemaNames {
+		for _, name := range strings.Split(item, ",") {
+			name = strings.TrimSpace(name)
+			if name == "" {
+				continue
+			}
+			if _, ok := seen[name]; ok {
+				continue
+			}
+
+			seen[name] = struct{}{}
+			names = append(names, name)
+		}
+	}
+
+	return names
 }
 
 func (c *Config) applyEnvironment() error {

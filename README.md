@@ -67,7 +67,25 @@ gqc generate getUser
 `gqc` can complete command names, flags, configured schema names, and top-level
 GraphQL `query`/`mutation` operation names from your local schema.
 
-For the current Bash session:
+Install completion for your current shell:
+
+```bash
+gqc completion install
+```
+
+Or choose the shell explicitly:
+
+```bash
+gqc completion install bash
+gqc completion install zsh
+gqc completion install fish
+gqc completion install powershell
+```
+
+The install command writes the generated completion script to the current user's
+standard completion directory. Restart the shell after installation.
+
+To print a script instead of installing it, pass the shell name:
 
 ```bash
 source <(gqc completion bash)
@@ -96,6 +114,7 @@ After loading completion, operation names are suggested directly in the terminal
 ```bash
 gqc generate <TAB>
 gqc generate --schema main <TAB>
+gqc generate --schema main --schema api <TAB>
 ```
 
 ## Configuration (`graphql.curl.yaml`)
@@ -128,7 +147,7 @@ environment:
 
 ### Field Reference
 
-- `schemas` (map): named GraphQL schema configs. Commands process all schemas by default, or one schema with `--schema <name>`.
+- `schemas` (map): named GraphQL schema configs. Commands process all schemas by default, or selected schemas with `--schema <name>`. The flag can be repeated or passed a comma-separated list.
 - `schemas.<name>.path` (string or []string): local schema file/directory path. `generate` parses matching files from this path. `fetch` writes the fetched schema to this path.
 - `schemas.<name>.endpoint` (string): GraphQL server URL for this schema.
 - `schemas.<name>.auth_token` (string): optional token value, usually loaded from `${ENV_VAR}` and available in headers as `{{auth_token}}`.
@@ -146,10 +165,12 @@ Generate `curl` commands for all root operations:
 gqc generate
 ```
 
-Generate for one configured schema:
+Generate for selected configured schemas:
 
 ```bash
 gqc generate --schema main || gqc g -s main
+gqc generate --schema main --schema api
+gqc generate --schema main,api
 ```
 
 Generate for one operation:
@@ -216,10 +237,11 @@ Generate a Postman Collection v2.1 file for every configured schema:
 gqc postman
 ```
 
-Generate only one configured schema from `graphql.curl.yaml`:
+Generate selected configured schemas from `graphql.curl.yaml`:
 
 ```bash
 gqc postman --schema main
+gqc postman --schema main --schema api
 ```
 
 Generate only operations declared in one schema file:
@@ -256,10 +278,11 @@ Fetch every configured schema using introspection and save each result to its `p
 gqc fetch
 ```
 
-Fetch one configured schema:
+Fetch selected configured schemas:
 
 ```bash
 gqc fetch --schema main || gqc f -s main
+gqc fetch --schema main --schema api
 ```
 
 If `schemas.<name>.path` points to a directory, output is saved as `schema.graphql` in that directory.

@@ -24,7 +24,7 @@ var (
 	varsFile    string
 	interactive bool
 	filterStr   string
-	genSchema   string
+	genSchema   []string
 	genFormat   string
 )
 
@@ -101,7 +101,7 @@ request body, or --format playground for separate query and variables blocks.`,
 			return commandError(cmd, "%v", err)
 		}
 
-		schemas, err := cfg.SelectedSchemas(genSchema)
+		schemas, err := cfg.SelectedSchemas(genSchema...)
 		if err != nil {
 			return commandError(cmd, "config error: %v", err)
 		}

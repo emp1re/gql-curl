@@ -15,7 +15,7 @@ import (
 	"github.com/emp1re/gql-curl/internal/config"
 )
 
-var fetchSchema string
+var fetchSchema []string
 
 var fetchCmd = &cobra.Command{
 	Use:     "fetch",
@@ -40,7 +40,7 @@ points to a directory, the fetched schema is saved as schema.graphql inside it.`
 			return commandError(cmd, "%s %v", errorColor("load config error:"), err)
 		}
 
-		schemas, err := cfg.SelectedSchemas(fetchSchema)
+		schemas, err := cfg.SelectedSchemas(fetchSchema...)
 		if err != nil {
 			return commandError(cmd, "%s %v", errorColor("config error:"), err)
 		}
@@ -91,7 +91,7 @@ points to a directory, the fetched schema is saved as schema.graphql inside it.`
 }
 
 func init() {
-	fetchCmd.Flags().StringVarP(&fetchSchema, "schema", "s", "", "Use one schema from config.schemas instead of all schemas")
+	fetchCmd.Flags().StringSliceVarP(&fetchSchema, "schema", "s", nil, "Use one or more schemas from config.schemas instead of all schemas")
 	registerSchemaFlagCompletion(fetchCmd, "schema")
 	rootCmd.AddCommand(fetchCmd)
 }

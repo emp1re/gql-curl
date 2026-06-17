@@ -115,6 +115,28 @@ func TestSelectedSchemasCanPickOneSchema(t *testing.T) {
 	}
 }
 
+func TestSelectedSchemasCanPickMultipleSchemas(t *testing.T) {
+	cfg := &Config{
+		Schemas: map[string]SchemaConfig{
+			"main": {Path: StringList{"/gql"}, Endpoint: "http://localhost:8080/gql/query"},
+			"api":  {Path: StringList{"./api/gql/"}, Endpoint: "http://api.service:8080/query"},
+		},
+	}
+
+	selected, err := cfg.SelectedSchemas("main,api", "main")
+	if err != nil {
+		t.Fatalf("SelectedSchemas returned error: %v", err)
+	}
+
+	var names []string
+	for _, schema := range selected {
+		names = append(names, schema.Name)
+	}
+	if got, want := names, []string{"main", "api"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("SelectedSchemas returned names %v, want %v", got, want)
+	}
+}
+
 func writeConfig(t *testing.T, content string) string {
 	t.Helper()
 

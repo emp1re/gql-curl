@@ -38,6 +38,40 @@ func TestGenerateCommandUsesSelectedNamedSchema(t *testing.T) {
 	}
 }
 
+func TestGenerateCommandUsesMultipleSelectedNamedSchemas(t *testing.T) {
+	workspace := writeCLIWorkspace(t)
+
+	output := runGQC(t, workspace, "generate", "--schema", "main", "--schema", "api")
+
+	for _, want := range []string{
+		"main",
+		"getUser",
+		"http://main.test/graphql",
+		"api",
+		"apiPing",
+		"http://api.test/graphql",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output does not contain %q:\n%s", want, output)
+		}
+	}
+}
+
+func TestGenerateCommandUsesCommaSeparatedNamedSchemas(t *testing.T) {
+	workspace := writeCLIWorkspace(t)
+
+	output := runGQC(t, workspace, "generate", "--schema", "api,main")
+
+	apiIndex := strings.Index(output, "apiPing")
+	mainIndex := strings.Index(output, "getUser")
+	if apiIndex == -1 || mainIndex == -1 {
+		t.Fatalf("output does not contain both api and main operations:\n%s", output)
+	}
+	if apiIndex > mainIndex {
+		t.Fatalf("output did not preserve selected schema order:\n%s", output)
+	}
+}
+
 func TestGenerateCommandProcessesAllNamedSchemasByDefault(t *testing.T) {
 	workspace := writeCLIWorkspace(t)
 
@@ -147,6 +181,32 @@ func TestCompletionCommandGeneratesBashScript(t *testing.T) {
 	}
 }
 
+func TestCompletionInstallCommandWritesFishScript(t *testing.T) {
+	workspace := writeCLIWorkspace(t)
+	configHome := t.TempDir()
+
+	output := runGQCWithEnv(t, workspace, []string{"XDG_CONFIG_HOME=" + configHome}, "completion", "install", "fish")
+
+	completionPath := filepath.Join(configHome, "fish", "completions", "gqc.fish")
+	if !strings.Contains(output, "Installed fish completion to: "+completionPath) {
+		t.Fatalf("output does not report installed completion path:\n%s", output)
+	}
+
+	data, err := os.ReadFile(completionPath)
+	if err != nil {
+		t.Fatalf("read completion file: %v", err)
+	}
+	script := string(data)
+	for _, want := range []string{
+		"complete -c gqc",
+		"__complete",
+	} {
+		if !strings.Contains(script, want) {
+			t.Fatalf("completion file does not contain %q:\n%s", want, script)
+		}
+	}
+}
+
 func TestGenerateCommandCompletesOperationNames(t *testing.T) {
 	workspace := writeCLIWorkspace(t)
 
@@ -184,6 +244,40 @@ func TestGenerateCommandCompletesOperationNamesForSelectedSchema(t *testing.T) {
 	}
 }
 
+func TestGenerateCommandCompletesOperationNamesForMultipleSelectedSchemas(t *testing.T) {
+	workspace := writeCLIWorkspace(t)
+
+	output := runGQC(t, workspace, "__complete", "generate", "--schema", "main", "--schema", "api", "")
+
+	for _, want := range []string{
+		"apiPing\tquery in api",
+		"createUser\tmutation in main",
+		"getUser\tquery in main",
+		":4",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output does not contain %q:\n%s", want, output)
+		}
+	}
+}
+
+func TestGenerateCommandCompletesOperationNamesWhenOneSchemaPathFails(t *testing.T) {
+	workspace := writeCLIWorkspaceWithBrokenSchema(t)
+
+	output := runGQC(t, workspace, "__complete", "generate", "")
+
+	for _, want := range []string{
+		"apiPing\tquery in api",
+		"createUser\tmutation in main",
+		"getUser\tquery in main",
+		":4",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output does not contain %q:\n%s", want, output)
+		}
+	}
+}
+
 func TestGenerateCommandCompletesSchemaFlag(t *testing.T) {
 	workspace := writeCLIWorkspace(t)
 
@@ -197,6 +291,25 @@ func TestGenerateCommandCompletesSchemaFlag(t *testing.T) {
 		if !strings.Contains(output, want) {
 			t.Fatalf("output does not contain %q:\n%s", want, output)
 		}
+	}
+}
+
+func TestGenerateCommandCompletesSchemaFlagAfterComma(t *testing.T) {
+	workspace := writeCLIWorkspace(t)
+
+	output := runGQC(t, workspace, "__complete", "generate", "--schema", "main,")
+
+	for _, want := range []string{
+		"main,api\tschema from graphql.curl.yaml",
+		":4",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output does not contain %q:\n%s", want, output)
+		}
+	}
+
+	if strings.Contains(output, "main,main") {
+		t.Fatalf("completion repeated selected schema:\n%s", output)
 	}
 }
 
@@ -232,7 +345,7 @@ func TestFetchCommandErrorPrintsHelp(t *testing.T) {
 		"Examples:",
 		"gqc fetch --schema main",
 		"Flags:",
-		"--schema string",
+		"--schema strings",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("output does not contain %q:\n%s", want, output)
@@ -333,10 +446,16 @@ func TestPostmanCommandErrorPrintsHelp(t *testing.T) {
 func runGQC(t *testing.T, workspace string, args ...string) string {
 	t.Helper()
 
+	return runGQCWithEnv(t, workspace, nil, args...)
+}
+
+func runGQCWithEnv(t *testing.T, workspace string, extraEnv []string, args ...string) string {
+	t.Helper()
+
 	binaryPath := buildGQC(t)
 	cmd := exec.Command(binaryPath, args...)
 	cmd.Dir = workspace
-	cmd.Env = cliEnv()
+	cmd.Env = append(cliEnv(), extraEnv...)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -467,6 +586,26 @@ document_extensions: [".graphql", ".graphqls", ".gql"]
 environment:
   MAX_DEPTH: 2
 `)
+
+	return workspace
+}
+
+func writeCLIWorkspaceWithBrokenSchema(t *testing.T) string {
+	t.Helper()
+
+	workspace := writeCLIWorkspace(t)
+	configPath := filepath.Join(workspace, "graphql.curl.yaml")
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+
+	content := strings.Replace(string(data), "document_extensions:", `  broken:
+    path: "`+filepath.Join(workspace, "missing-schema")+`"
+    endpoint: "http://broken.test/graphql"
+document_extensions:`, 1)
+	writeFile(t, configPath, content)
 
 	return workspace
 }

@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	postmanSchema string
+	postmanSchema []string
 	postmanFile   string
 	postmanOut    string
 	postmanName   string
@@ -48,7 +48,7 @@ and mutation fields declared in one schema file such as center.graphqls.`,
 			return commandError(cmd, "load config error: %v", err)
 		}
 
-		schemas, err := cfg.SelectedSchemas(postmanSchema)
+		schemas, err := cfg.SelectedSchemas(postmanSchema...)
 		if err != nil {
 			return commandError(cmd, "config error: %v", err)
 		}
@@ -115,7 +115,7 @@ and mutation fields declared in one schema file such as center.graphqls.`,
 }
 
 func init() {
-	postmanCmd.Flags().StringVarP(&postmanSchema, "schema", "s", "", "Use one schema from config.schemas instead of all schemas")
+	postmanCmd.Flags().StringSliceVarP(&postmanSchema, "schema", "s", nil, "Use one or more schemas from config.schemas instead of all schemas")
 	postmanCmd.Flags().StringVarP(&postmanFile, "file", "f", "", "Include only operations declared in this schema file, for example center.graphqls")
 	postmanCmd.Flags().StringVarP(&postmanOut, "out", "o", "postman_collection.json", "Output collection path, or '-' to print JSON to stdout")
 	postmanCmd.Flags().StringVarP(&postmanName, "name", "n", "", "Postman collection name")
@@ -326,9 +326,10 @@ func normalizePathForMatch(path string) string {
 	return filepath.ToSlash(filepath.Clean(strings.TrimSpace(path)))
 }
 
-func defaultPostmanCollectionName(schemaName string) string {
-	if strings.TrimSpace(schemaName) != "" {
-		return schemaName + " GraphQL"
+func defaultPostmanCollectionName(schemaNames []string) string {
+	names := config.NormalizeSchemaNames(schemaNames)
+	if len(names) == 1 {
+		return names[0] + " GraphQL"
 	}
 
 	return "GraphQL APIs"

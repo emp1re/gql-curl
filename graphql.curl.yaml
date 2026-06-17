@@ -1,19 +1,11 @@
 # graphql.curl.yaml
 schemas:
   main:
-    path: "/gql"
+    path: "./gql"
     endpoint: "http://localhost:8080/gql/query"
     auth_token: ${MAIN_AUTH_TOKEN}
     headers:
       Authorization: "Bearer {{auth_token}}"
-
-  api:
-    path: "./api/gql/"
-    endpoint: "http://api.service:8080/query"
-    auth_token: ${API_AUTH_TOKEN}
-    headers:
-      Authorization: "Bearer {{auth_token}}"
-      X-API-Key: ${API_KEY}
 
 document_extensions: [".graphql", ".graphqls", ".gql"]
 
