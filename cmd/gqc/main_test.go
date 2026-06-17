@@ -102,7 +102,7 @@ func TestGenerateCommandPrintsPostmanPayloadFormat(t *testing.T) {
 		"main",
 		`"query": "query getUser($id: ID!) {\n  getUser(id: $id) {\n    id\n    name\n  }\n}"`,
 		`"variables": {`,
-		`"id": "<ID>"`,
+		`"id": "<required ID>"`,
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("output does not contain %q:\n%s", want, output)
@@ -128,7 +128,7 @@ func TestGenerateCommandPrintsPlaygroundFormatForMutation(t *testing.T) {
 		"    name",
 		"# Variables",
 		`"input": {`,
-		`"name": "<String>"`,
+		`"name": "<required String>"`,
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("output does not contain %q:\n%s", want, output)
@@ -380,7 +380,7 @@ func TestPostmanCommandWritesSelectedSchemaFileCollection(t *testing.T) {
 		`"mode": "graphql"`,
 		`"query": "query getUser($id: ID!)`,
 		`\n  getUser(id: $id) {\n    id\n    name\n  }\n}`,
-		`"variables": "{\n  \"id\": \"<ID>\"\n}"`,
+		`"variables": "{\n  \"id\": \"<required ID>\"\n}"`,
 	} {
 		if !strings.Contains(collection, want) {
 			t.Fatalf("collection does not contain %q:\n%s", want, collection)

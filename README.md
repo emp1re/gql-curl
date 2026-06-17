@@ -15,7 +15,7 @@ It also supports schema fetching via GraphQL introspection.
 - Request performance metrics in `--run` mode (Total, TTFB, DNS, TCP, TLS, Size).
 - `--filter` support (gjson syntax) to print only part of a response.
 - Variables from inline JSON (`--vars`) or JSON file (`--var-file`).
-- Copy-friendly output formats for Postman JSON payloads and GraphQL Playground query/variables blocks.
+- Copy-friendly output formats for Postman JSON payloads and GraphQL Playground query/variables blocks, including typed variable hints.
 - Postman Collection v2.1 export with folders per schema file and requests per query/mutation.
 - Multiple named schemas with separate paths, endpoints, auth tokens, and headers.
 - Header interpolation using `{{auth_token}}`, `{{environment.KEY}}`, and `${ENV_VAR}` values.
@@ -227,6 +227,10 @@ Print separate query and variables blocks for GraphQL Playground:
 gqc generate getUser --format playground
 ```
 
+Postman and Playground formats use editable variable hints such as
+`"<required ID>"`, `"<optional Role enum: ADMIN | USER>"`, and GraphQL default
+values when the schema defines them.
+
 > Note: `--vars` and `--var-file` are mutually exclusive.
 
 ### `postman`
@@ -305,7 +309,7 @@ Postman payload output:
 {
   "query": "query getUser($id: ID!) {\n  getUser(id: $id) {\n    id\n    name\n  }\n}",
   "variables": {
-    "id": "<ID>"
+    "id": "<required ID>"
   }
 }
 ```
@@ -324,7 +328,7 @@ query getUser($id: ID!) {
 
 ```json
 {
-  "id": "<ID>"
+  "id": "<required ID>"
 }
 ```
 

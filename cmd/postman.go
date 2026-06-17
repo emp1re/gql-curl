@@ -160,7 +160,7 @@ func buildPostmanSchemaFolder(schemaCfg config.NamedSchema, fileFilter string) (
 			}
 
 			group := addPostmanSourceGroup(groups, &sourceOrder, sourceName, sourceDisplayName(sourceName, schemaPaths))
-			variablesJSON, err := gen.GenerateVariablesJSON(field, nil, true)
+			variablesJSON, err := gen.GenerateVariablesJSONWithVariableHints(field, nil, true)
 			if err != nil {
 				return fmt.Errorf("generate variables for %s %s failed: %w", opType, field.Name, err)
 			}

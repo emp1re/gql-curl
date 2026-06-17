@@ -244,9 +244,9 @@ func buildGenerateOutput(gen *generator.Generator, opType string, field *ast.Fie
 	case generateFormatCurl:
 		return gen.GenerateCurl(opType, field, vars), nil
 	case generateFormatPayload:
-		return gen.GeneratePayloadJSON(opType, field, vars, true)
+		return gen.GeneratePayloadJSONWithVariableHints(opType, field, vars, true)
 	case generateFormatPlayground:
-		variablesJSON, err := gen.GenerateVariablesJSON(field, vars, true)
+		variablesJSON, err := gen.GenerateVariablesJSONWithVariableHints(field, vars, true)
 		if err != nil {
 			return "", err
 		}

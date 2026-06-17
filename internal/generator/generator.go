@@ -107,6 +107,35 @@ func (g *Generator) GenerateVariablesJSON(field *ast.FieldDefinition, customVars
 	return encodeJSON(vars, pretty)
 }
 
+func (g *Generator) GeneratePayloadJSONWithVariableHints(opType string, field *ast.FieldDefinition, customVars map[string]interface{}, pretty bool) (string, error) {
+	if customVars != nil {
+		return g.GeneratePayloadJSON(opType, field, customVars, pretty)
+	}
+
+	payload := GraphQLPayload{
+		Query: g.BuildOperation(opType, field),
+	}
+	vars := g.buildVariableHintsSkeleton(field)
+	if len(vars) > 0 {
+		payload.Variables = vars
+	}
+
+	return encodeJSON(payload, pretty)
+}
+
+func (g *Generator) GenerateVariablesJSONWithVariableHints(field *ast.FieldDefinition, customVars map[string]interface{}, pretty bool) (string, error) {
+	if customVars != nil {
+		return g.GenerateVariablesJSON(field, customVars, pretty)
+	}
+
+	vars := g.buildVariableHintsSkeleton(field)
+	if vars == nil {
+		vars = map[string]interface{}{}
+	}
+
+	return encodeJSON(vars, pretty)
+}
+
 func encodeJSON(value interface{}, pretty bool) (string, error) {
 	var buf bytes.Buffer
 	encoder := json.NewEncoder(&buf)
@@ -164,6 +193,24 @@ func (g *Generator) buildVariablesSkeleton(field *ast.FieldDefinition) map[strin
 	return vars
 }
 
+func (g *Generator) buildVariableHintsSkeleton(field *ast.FieldDefinition) map[string]interface{} {
+	if len(field.Arguments) == 0 {
+		return nil
+	}
+
+	vars := make(map[string]interface{})
+	for _, arg := range field.Arguments {
+		if value, ok := astValueToInterface(arg.DefaultValue); ok {
+			vars[arg.Name] = value
+			continue
+		}
+
+		vars[arg.Name] = g.getHintValueForType(arg.Type, 0)
+	}
+
+	return vars
+}
+
 func (g *Generator) getDefaultValueForType(typ *ast.Type, depth int) interface{} {
 	if depth > config.MaxDepth {
 		return nil
@@ -200,6 +247,71 @@ func (g *Generator) getDefaultValueForType(typ *ast.Type, depth int) interface{}
 	}
 
 	return nil
+}
+
+func (g *Generator) getHintValueForType(typ *ast.Type, depth int) interface{} {
+	if depth > config.MaxDepth {
+		return nil
+	}
+
+	if typ.Elem != nil {
+		return []interface{}{g.getHintValueForType(typ.Elem, depth+1)}
+	}
+
+	typeName := typ.Name()
+	def, ok := g.Schema.Types[typeName]
+	if !ok {
+		return typeHintPlaceholder(typeName, typ.NonNull)
+	}
+
+	switch def.Kind {
+	case ast.Scalar:
+		return typeHintPlaceholder(typeName, typ.NonNull)
+	case ast.Enum:
+		values := make([]string, 0, len(def.EnumValues))
+		for _, value := range def.EnumValues {
+			values = append(values, value.Name)
+		}
+		if len(values) == 0 {
+			return typeHintPlaceholder(typeName+" enum", typ.NonNull)
+		}
+
+		return typeHintPlaceholder(fmt.Sprintf("%s enum: %s", typeName, strings.Join(values, " | ")), typ.NonNull)
+	case ast.InputObject:
+		obj := make(map[string]interface{})
+		for _, field := range def.Fields {
+			if value, ok := astValueToInterface(field.DefaultValue); ok {
+				obj[field.Name] = value
+				continue
+			}
+
+			obj[field.Name] = g.getHintValueForType(field.Type, depth+1)
+		}
+		return obj
+	default:
+		return typeHintPlaceholder(typeName, typ.NonNull)
+	}
+}
+
+func typeHintPlaceholder(typeName string, required bool) string {
+	if required {
+		return "<required " + typeName + ">"
+	}
+
+	return "<optional " + typeName + ">"
+}
+
+func astValueToInterface(value *ast.Value) (interface{}, bool) {
+	if value == nil {
+		return nil, false
+	}
+
+	result, err := value.Value(nil)
+	if err != nil {
+		return nil, false
+	}
+
+	return result, true
 }
 
 func (g *Generator) BuildQuery(opType string, field *ast.FieldDefinition) string {

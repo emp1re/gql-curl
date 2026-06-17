@@ -180,6 +180,65 @@ func TestGenerateVariablesJSONReturnsEmptyObjectWithoutArguments(t *testing.T) {
 	}
 }
 
+func TestGeneratePayloadJSONWithVariableHintsUsesTypedPlaceholders(t *testing.T) {
+	gen, schema := newTestGenerator(t, "http://example.test/graphql", nil)
+	field := schema.Query.Fields.ForName("user")
+
+	payloadJSON, err := gen.GeneratePayloadJSONWithVariableHints("query", field, nil, true)
+	if err != nil {
+		t.Fatalf("GeneratePayloadJSONWithVariableHints returned error: %v", err)
+	}
+
+	for _, want := range []string{
+		`"id": "<required ID>"`,
+		`"active": "<optional Boolean>"`,
+		`"limit": 25`,
+		`"role": "<optional Role enum: ADMIN | USER>"`,
+		`"tags": [`,
+		`"<required String>"`,
+	} {
+		if !strings.Contains(payloadJSON, want) {
+			t.Fatalf("payload JSON does not contain %q:\n%s", want, payloadJSON)
+		}
+	}
+}
+
+func TestGenerateVariablesJSONWithVariableHintsUsesEnumValues(t *testing.T) {
+	gen, schema := newTestGenerator(t, "http://example.test/graphql", nil)
+	field := schema.Mutation.Fields.ForName("createUser")
+
+	variablesJSON, err := gen.GenerateVariablesJSONWithVariableHints(field, nil, true)
+	if err != nil {
+		t.Fatalf("GenerateVariablesJSONWithVariableHints returned error: %v", err)
+	}
+
+	for _, want := range []string{
+		`"name": "<required String>"`,
+		`"role": "<optional Role enum: ADMIN | USER>"`,
+	} {
+		if !strings.Contains(variablesJSON, want) {
+			t.Fatalf("variables JSON does not contain %q:\n%s", want, variablesJSON)
+		}
+	}
+}
+
+func TestGenerateVariablesJSONWithVariableHintsKeepsCustomVariables(t *testing.T) {
+	gen, schema := newTestGenerator(t, "http://example.test/graphql", nil)
+	field := schema.Query.Fields.ForName("user")
+
+	variablesJSON, err := gen.GenerateVariablesJSONWithVariableHints(field, map[string]interface{}{"id": "42"}, true)
+	if err != nil {
+		t.Fatalf("GenerateVariablesJSONWithVariableHints returned error: %v", err)
+	}
+
+	if !strings.Contains(variablesJSON, `"id": "42"`) {
+		t.Fatalf("variables JSON does not contain custom id:\n%s", variablesJSON)
+	}
+	if strings.Contains(variablesJSON, "<required ID>") {
+		t.Fatalf("variables JSON should not include hints when custom variables are provided:\n%s", variablesJSON)
+	}
+}
+
 func TestBuildQueryRespectsMaxDepth(t *testing.T) {
 	restoreGeneratorMaxDepth(t)
 	gen, schema := newTestGenerator(t, "http://example.test/graphql", nil)
@@ -291,7 +350,7 @@ enum Role {
 }
 
 input NestedInput {
-  limit: Int
+  limit: Int = 25
 }
 
 input UserFilter {
