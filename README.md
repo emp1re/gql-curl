@@ -227,6 +227,9 @@ Print separate query and variables blocks for GraphQL Playground:
 gqc generate getUser --format playground
 ```
 
+Playground output is plain text without ANSI styling, so it can be pasted
+cleanly into Postman or another GraphQL editor.
+
 Postman and Playground formats use editable variable hints such as
 `"<required ID>"`, `"<optional Role enum: ADMIN | USER>"`, and GraphQL default
 values when the schema defines them.

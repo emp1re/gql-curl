@@ -271,37 +271,12 @@ func colorGeneratedOutput(output string, format generateOutputFormat, colorize f
 	case generateFormatCurl:
 		return colorize(output)
 	case generateFormatPlayground:
-		return colorPlaygroundOutput(output)
+		// Playground output is intended for clipboard use. ANSI styling can be
+		// copied as terminal padding by some terminal emulators and editors.
+		return output
 	default:
 		return output
 	}
-}
-
-func colorPlaygroundOutput(output string) string {
-	if color.NoColor {
-		return output
-	}
-
-	const separator = "\n\n# Variables\n"
-	parts := strings.SplitN(output, separator, 2)
-	if len(parts) != 2 {
-		return output
-	}
-
-	header, query, ok := strings.Cut(parts[0], "\n")
-	if !ok || (header != "# Query" && header != "# Mutation") {
-		return output
-	}
-
-	headerColor := color.New(color.FgCyan, color.Bold).SprintFunc()
-	queryColor := color.New(color.FgYellow).SprintFunc()
-
-	return fmt.Sprintf("%s\n%s\n\n%s\n%s",
-		headerColor(header),
-		queryColor(query),
-		headerColor("# Variables"),
-		colorizeJSONString(parts[1]),
-	)
 }
 
 func printColorized(rawJSON string) {
@@ -315,22 +290,6 @@ func printColorized(rawJSON string) {
 	f.Indent = 2
 	colored, _ := f.Marshal(obj)
 	fmt.Println(string(colored))
-}
-
-func colorizeJSONString(rawJSON string) string {
-	var obj interface{}
-	if err := json.Unmarshal([]byte(rawJSON), &obj); err != nil {
-		return rawJSON
-	}
-
-	f := colorjson.NewFormatter()
-	f.Indent = 2
-	colored, err := f.Marshal(obj)
-	if err != nil {
-		return rawJSON
-	}
-
-	return string(colored)
 }
 
 func formatBytes(b int64) string {
